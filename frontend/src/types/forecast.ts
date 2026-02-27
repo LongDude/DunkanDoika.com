@@ -5,6 +5,13 @@ export type DatasetUploadResponse = {
   status_counts: Record<string, number>
 }
 
+export type DatasetQualityIssueSeverity = 'info' | 'warning' | 'error'
+export type DatasetQualityIssue = {
+  code: string
+  severity: DatasetQualityIssueSeverity
+  message: string
+}
+
 export type ForecastPoint = {
   date: string
   milking_count: number
@@ -40,6 +47,17 @@ export type PurchaseItem = {
   days_pregnant?: number | null
 }
 
+export type ServicePeriodParams = {
+  mean_days: number
+  std_days: number
+  min_days_after_calving: number
+}
+
+export type HeiferInsemParams = {
+  min_age_days: number
+  max_age_days: number
+}
+
 export type ScenarioInfo = {
   scenario_id: string
   name: string
@@ -49,17 +67,74 @@ export type ScenarioInfo = {
   horizon_months: number
 }
 
+export type CullingParams = {
+  estimate_from_dataset: boolean
+  grouping: CullGrouping
+  fallback_monthly_hazard: number
+  age_band_years: number
+}
+
+export type ReplacementParams = {
+  enabled: boolean
+  annual_heifer_ratio: number
+  lookahead_months: number
+}
+
+export type ScenarioParams = {
+  dataset_id: string
+  report_date: string
+  horizon_months: number
+  future_date?: string | null
+  seed: number
+  mc_runs: number
+  service_period: ServicePeriodParams
+  heifer_insem: HeiferInsemParams
+  culling: CullingParams
+  replacement: ReplacementParams
+  purchases: PurchaseItem[]
+}
+
 export type ScenarioDetail = {
   scenario_id: string
   name: string
   created_at: string
-  params: any
+  params: ScenarioParams
 }
 
 export type CullGrouping = 'lactation' | 'lactation_status' | 'age_band'
+export type ScenarioPreset = 'baseline' | 'conservative' | 'aggressive'
+
+export type UiValidationIssue = {
+  field: string
+  message: string
+  severity: DatasetQualityIssueSeverity
+}
+
+export type DisabledReason = {
+  disabled: boolean
+  reason: string | null
+}
 
 export type CompareItem = {
   id: string
   label: string
   res: ForecastResult
+}
+
+export type ComparisonDeltaRow = {
+  id: string
+  label: string
+  dim_delta: number | null
+  milking_delta: number
+  dry_delta: number
+  heifer_delta: number
+  pregnant_heifer_delta: number
+}
+
+export type ForecastKpiSnapshot = {
+  date: string
+  p50_dim: number | null
+  milking_count: number
+  dry_ratio: number | null
+  trend_delta: number | null
 }
