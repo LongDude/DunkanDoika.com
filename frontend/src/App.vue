@@ -30,9 +30,6 @@
           {{ t('run.completedRuns') }}:
           {{ workspace.runLayer.completedRuns.value }}/{{ workspace.runLayer.totalRuns.value }}
         </p>
-        <p v-if="workspace.runLayer.running.value" class="muted">
-          {{ t('run.channel') }}: {{ runChannelLabel }}
-        </p>
         <p v-if="workspace.runLayer.lastRunAt.value" class="muted">
           {{ t('run.lastRunAt') }}: {{ formattedLastRunAt }}
         </p>
@@ -163,10 +160,6 @@ const runStatusLabel = computed(() => {
   return t(`run.${status}`)
 })
 
-const runChannelLabel = computed(() =>
-  workspace.runLayer.transportMode.value === 'ws' ? t('run.liveWs') : t('run.fallbackPolling')
-)
-
 const formattedLastRunAt = computed(() => formatDate(workspace.runLayer.lastRunAt.value, currentLocale.value))
 
 const kpiSnapshot = computed<ForecastKpiSnapshot | null>(() => {
@@ -195,23 +188,17 @@ async function handleFileInput(event: Event) {
 }
 
 async function handleRunForecast() {
+  activeScreen.value = 'forecast'
   await workspace.runForecast()
-  if (workspace.runLayer.result.value) {
-    activeScreen.value = 'forecast'
-  }
 }
 
 async function handleFastRun() {
+  activeScreen.value = 'forecast'
   await workspace.fastRun('baseline')
-  if (workspace.runLayer.result.value) {
-    activeScreen.value = 'forecast'
-  }
 }
 
 async function handleRunSavedScenario(id: string) {
+  activeScreen.value = 'forecast'
   await workspace.runSavedScenarioById(id)
-  if (workspace.runLayer.result.value) {
-    activeScreen.value = 'forecast'
-  }
 }
 </script>
