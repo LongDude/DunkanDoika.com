@@ -26,6 +26,8 @@ class ForecastJobRepository:
             params_json=params.model_dump(mode="json"),
             status=ForecastJobStatus.QUEUED.value,
             progress_pct=0,
+            completed_runs=0,
+            total_runs=params.mc_runs,
             queued_at=queued_at,
             expires_at=queued_at + timedelta(days=expires_in_days),
         )
@@ -37,22 +39,35 @@ class ForecastJobRepository:
     def get(self, job_id: str) -> ForecastJobModel | None:
         return self.session.get(ForecastJobModel, job_id)
 
-    def mark_running(self, job_id: str, progress_pct: int = 10) -> ForecastJobModel | None:
+    def mark_running(self, job_id: str, progress_pct: int = 10, total_runs: int | None = None) -> ForecastJobModel | None:
         job = self.get(job_id)
         if job is None:
             return None
         job.status = ForecastJobStatus.RUNNING.value
         job.progress_pct = progress_pct
+        job.completed_runs = 0
+        if total_runs is not None:
+            job.total_runs = max(0, total_runs)
         job.started_at = now_utc()
         self.session.commit()
         self.session.refresh(job)
         return job
 
-    def update_progress(self, job_id: str, progress_pct: int) -> ForecastJobModel | None:
+    def update_progress(
+        self,
+        job_id: str,
+        progress_pct: int,
+        completed_runs: int | None = None,
+        total_runs: int | None = None,
+    ) -> ForecastJobModel | None:
         job = self.get(job_id)
         if job is None:
             return None
         job.progress_pct = max(0, min(100, progress_pct))
+        if completed_runs is not None:
+            job.completed_runs = max(0, completed_runs)
+        if total_runs is not None:
+            job.total_runs = max(0, total_runs)
         self.session.commit()
         self.session.refresh(job)
         return job
@@ -80,6 +95,7 @@ class ForecastJobRepository:
             return None
         job.status = ForecastJobStatus.SUCCEEDED.value
         job.progress_pct = 100
+        job.completed_runs = max(job.completed_runs, job.total_runs)
         job.error_message = None
         job.result_object_key = result_object_key
         job.csv_object_key = csv_object_key
@@ -106,6 +122,8 @@ class ForecastJobRepository:
             return None
         job.status = ForecastJobStatus.QUEUED.value
         job.progress_pct = 0
+        job.completed_runs = 0
+        job.total_runs = int(job.params_json.get("mc_runs", 0)) if isinstance(job.params_json, dict) else 0
         job.error_message = None
         job.started_at = None
         job.finished_at = None

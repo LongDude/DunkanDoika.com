@@ -23,6 +23,10 @@ class Settings(BaseSettings):
     max_upload_bytes: int = Field(default=10 * 1024 * 1024)  # 10 MB
     allowed_cors_origins: str = Field(default="http://127.0.0.1:5173,http://localhost:5173")
     stuck_job_timeout_minutes: int = Field(default=30)
+    mc_parallel_enabled: bool = Field(default=True)
+    mc_max_processes: int = Field(default=4)
+    mc_batch_size: int = Field(default=8)
+    ws_heartbeat_seconds: int = Field(default=15)
 
     @property
     def allowed_cors_origins_list(self) -> list[str]:

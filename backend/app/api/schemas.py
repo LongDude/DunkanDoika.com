@@ -139,6 +139,8 @@ class ForecastJobInfo(BaseModel):
     scenario_id: Optional[str] = None
     status: ForecastJobStatus
     progress_pct: int = Field(ge=0, le=100)
+    completed_runs: int = Field(ge=0, default=0)
+    total_runs: int = Field(ge=0, default=0)
     error_message: Optional[str] = None
     queued_at: datetime
     started_at: Optional[datetime] = None

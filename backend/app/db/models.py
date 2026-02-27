@@ -60,6 +60,8 @@ class ForecastJobModel(Base):
     params_json: Mapped[dict] = mapped_column(JSONB, nullable=False)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="queued")
     progress_pct: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    completed_runs: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    total_runs: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     result_object_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
     csv_object_key: Mapped[str | None] = mapped_column(String(500), nullable=True)

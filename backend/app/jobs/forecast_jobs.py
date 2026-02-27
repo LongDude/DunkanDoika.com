@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import json
+from math import floor
 import time
 from typing import Callable, TypeVar
 
@@ -10,6 +11,7 @@ from minio.error import S3Error
 from app.api.schemas import ForecastJobStatus, ForecastResult, ScenarioParams
 from app.core.config import settings
 from app.db.session import SessionLocal
+from app.live.events import publish_job_event
 from app.repositories.datasets import DatasetRepository
 from app.repositories.forecast_jobs import ForecastJobRepository
 from app.simulator.exporter import export_forecast_csv, export_forecast_xlsx
@@ -43,14 +45,39 @@ def run_forecast_job(forecast_job_id: str) -> None:
         if existing.status in {ForecastJobStatus.SUCCEEDED.value, ForecastJobStatus.FAILED.value}:
             return
 
-        jobs.mark_running(forecast_job_id, progress_pct=10)
-
         params = ScenarioParams.model_validate(existing.params_json)
-        jobs.update_progress(forecast_job_id, 40)
+        total_runs = params.mc_runs
+        job_row = jobs.mark_running(forecast_job_id, progress_pct=10, total_runs=total_runs)
+        if job_row is not None:
+            publish_job_event(
+                forecast_job_id,
+                {
+                    "type": "job_progress",
+                    "status": job_row.status,
+                    "progress_pct": job_row.progress_pct,
+                    "completed_runs": job_row.completed_runs,
+                    "total_runs": job_row.total_runs,
+                    "partial_result": None,
+                    "error_message": None,
+                },
+            )
 
         dataset_row = datasets.get(params.dataset_id)
         if dataset_row is None:
-            jobs.mark_failed(forecast_job_id, "DATASET_NOT_FOUND: dataset metadata missing")
+            failed = jobs.mark_failed(forecast_job_id, "DATASET_NOT_FOUND: dataset metadata missing")
+            if failed is not None:
+                publish_job_event(
+                    forecast_job_id,
+                    {
+                        "type": "job_failed",
+                        "status": failed.status,
+                        "progress_pct": failed.progress_pct,
+                        "completed_runs": failed.completed_runs,
+                        "total_runs": failed.total_runs,
+                        "partial_result": None,
+                        "error_message": failed.error_message,
+                    },
+                )
             return
 
         try:
@@ -58,12 +85,56 @@ def run_forecast_job(forecast_job_id: str) -> None:
                 lambda: storage_client.get_bytes(storage_client.datasets_bucket, dataset_row.object_key)
             )
         except S3Error:
-            jobs.mark_failed(forecast_job_id, "DATASET_OBJECT_MISSING: dataset object missing in storage")
+            failed = jobs.mark_failed(forecast_job_id, "DATASET_OBJECT_MISSING: dataset object missing in storage")
+            if failed is not None:
+                publish_job_event(
+                    forecast_job_id,
+                    {
+                        "type": "job_failed",
+                        "status": failed.status,
+                        "progress_pct": failed.progress_pct,
+                        "completed_runs": failed.completed_runs,
+                        "total_runs": failed.total_runs,
+                        "partial_result": None,
+                        "error_message": failed.error_message,
+                    },
+                )
             return
 
         df = load_dataset_df(io.BytesIO(csv_bytes))
-        result = run_forecast(df, params)
-        jobs.update_progress(forecast_job_id, 80)
+
+        def on_progress(completed_runs: int, all_runs: int, partial_result: ForecastResult) -> None:
+            progress = 10 + floor(80 * completed_runs / max(1, all_runs))
+            progress = min(progress, 90)
+            updated = jobs.update_progress(
+                forecast_job_id,
+                progress_pct=progress,
+                completed_runs=completed_runs,
+                total_runs=all_runs,
+            )
+            if updated is None:
+                return
+            publish_job_event(
+                forecast_job_id,
+                {
+                    "type": "job_progress",
+                    "status": updated.status,
+                    "progress_pct": updated.progress_pct,
+                    "completed_runs": updated.completed_runs,
+                    "total_runs": updated.total_runs,
+                    "partial_result": partial_result.model_dump(mode="json"),
+                    "error_message": None,
+                },
+            )
+
+        result = run_forecast(
+            df,
+            params,
+            parallel_enabled=settings.mc_parallel_enabled,
+            max_processes=settings.mc_max_processes,
+            batch_size=settings.mc_batch_size,
+            progress_callback=on_progress,
+        )
 
         result_key = f"results/{forecast_job_id}.json"
         csv_key = f"exports/{forecast_job_id}.csv"
@@ -90,8 +161,35 @@ def run_forecast_job(forecast_job_id: str) -> None:
             csv_object_key=csv_key,
             xlsx_object_key=xlsx_key,
         )
+        done = jobs.get(forecast_job_id)
+        if done is not None:
+            publish_job_event(
+                forecast_job_id,
+                {
+                    "type": "job_succeeded",
+                    "status": done.status,
+                    "progress_pct": done.progress_pct,
+                    "completed_runs": done.completed_runs,
+                    "total_runs": done.total_runs,
+                    "partial_result": result.model_dump(mode="json"),
+                    "error_message": None,
+                },
+            )
     except Exception as exc:
-        ForecastJobRepository(session).mark_failed(forecast_job_id, f"INTERNAL_ERROR: {exc}")
+        failed = ForecastJobRepository(session).mark_failed(forecast_job_id, f"INTERNAL_ERROR: {exc}")
+        if failed is not None:
+            publish_job_event(
+                forecast_job_id,
+                {
+                    "type": "job_failed",
+                    "status": failed.status,
+                    "progress_pct": failed.progress_pct,
+                    "completed_runs": failed.completed_runs,
+                    "total_runs": failed.total_runs,
+                    "partial_result": None,
+                    "error_message": failed.error_message,
+                },
+            )
     finally:
         session.close()
 

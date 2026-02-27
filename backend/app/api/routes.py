@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, File, Request, UploadFile, status
+from datetime import datetime, timezone
+
+from fastapi import APIRouter, Depends, File, Request, UploadFile, WebSocket, WebSocketDisconnect, status
 from fastapi.responses import StreamingResponse
 from redis import Redis
 from pydantic import ValidationError
@@ -23,6 +25,7 @@ from app.api.schemas import (
 from app.core.config import settings
 from app.db.session import SessionLocal, get_db_session
 from app.jobs.forecast_jobs import read_job_result
+from app.live.events import iter_job_events
 from app.queueing import enqueue_forecast_job
 from app.repositories.datasets import DatasetRepository
 from app.repositories.forecast_jobs import ForecastJobRepository
@@ -39,12 +42,39 @@ def _to_job_info(item) -> ForecastJobInfo:
         scenario_id=item.scenario_id,
         status=ForecastJobStatus(item.status),
         progress_pct=item.progress_pct,
+        completed_runs=item.completed_runs,
+        total_runs=item.total_runs,
         error_message=item.error_message,
         queued_at=item.queued_at,
         started_at=item.started_at,
         finished_at=item.finished_at,
         expires_at=item.expires_at,
     )
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _job_state_event(item) -> dict:
+    if item.status == ForecastJobStatus.SUCCEEDED.value:
+        event_type = "job_succeeded"
+    elif item.status == ForecastJobStatus.FAILED.value:
+        event_type = "job_failed"
+    else:
+        event_type = "job_progress"
+
+    return {
+        "type": event_type,
+        "job_id": item.job_id,
+        "status": item.status,
+        "progress_pct": item.progress_pct,
+        "completed_runs": item.completed_runs,
+        "total_runs": item.total_runs,
+        "partial_result": None,
+        "error_message": item.error_message,
+        "ts": _utc_now_iso(),
+    }
 
 
 def _to_dataset_upload_response(item) -> DatasetUploadResponse:
@@ -233,6 +263,42 @@ def get_forecast_job(job_id: str, session: Session = Depends(get_db_session)) ->
     if job is None:
         raise api_error(404, "JOB_NOT_FOUND", "Forecast job not found")
     return _to_job_info(job)
+
+
+@router.websocket("/ws/forecast/jobs/{job_id}")
+async def stream_forecast_job(websocket: WebSocket, job_id: str) -> None:
+    await websocket.accept()
+    with SessionLocal() as session:
+        job = ForecastJobRepository(session).get(job_id)
+        if job is None:
+            await websocket.send_json(
+                {
+                    "type": "job_failed",
+                    "job_id": job_id,
+                    "status": ForecastJobStatus.FAILED.value,
+                    "progress_pct": 0,
+                    "completed_runs": 0,
+                    "total_runs": 0,
+                    "partial_result": None,
+                    "error_message": "JOB_NOT_FOUND",
+                    "ts": _utc_now_iso(),
+                }
+            )
+            await websocket.close(code=4404)
+            return
+        snapshot = _job_state_event(job)
+        await websocket.send_json(snapshot)
+        if snapshot["type"] in {"job_succeeded", "job_failed"}:
+            await websocket.close()
+            return
+
+    try:
+        async for event in iter_job_events(job_id, settings.ws_heartbeat_seconds):
+            await websocket.send_json(event)
+            if event.get("type") in {"job_succeeded", "job_failed"}:
+                return
+    except WebSocketDisconnect:
+        return
 
 
 @router.get("/forecast/jobs/{job_id}/result", response_model=ForecastResult)

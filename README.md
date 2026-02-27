@@ -40,6 +40,10 @@ Key variables:
 - `MAX_UPLOAD_BYTES`
 - `ALLOWED_CORS_ORIGINS`
 - `STUCK_JOB_TIMEOUT_MINUTES`
+- `MC_PARALLEL_ENABLED`
+- `MC_MAX_PROCESSES`
+- `MC_BATCH_SIZE`
+- `WS_HEARTBEAT_SECONDS`
 
 ## API Overview (Async Forecast)
 
@@ -67,6 +71,7 @@ Key variables:
 - `GET /api/forecast/jobs/{job_id}/result`
 - `GET /api/forecast/jobs/{job_id}/export/csv`
 - `GET /api/forecast/jobs/{job_id}/export/xlsx`
+- `WS /api/ws/forecast/jobs/{job_id}` for live progress + partial snapshots
 
 ### Deprecated Sync Endpoints
 
@@ -79,5 +84,6 @@ These return `410 Gone`:
 ## Notes
 
 - Forecast calculations are executed only by `backend-worker`.
+- Database migrations are applied by `backend` startup command (worker does not run Alembic).
 - Datasets, forecast results, and exports are stored in MinIO.
 - Scenario and job metadata are persisted in PostgreSQL.

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+import io
+from concurrent.futures import ProcessPoolExecutor
 from datetime import date, timedelta
-from typing import Dict, List, Optional, Tuple
-import copy
+from typing import Callable, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -200,6 +200,24 @@ def run_one(df: pd.DataFrame, params: ScenarioParams, seed: int) -> Tuple[List[d
 
     return series, events, future_point
 
+ProgressCallback = Callable[[int, int, ForecastResult], None]
+
+_WORKER_DF: pd.DataFrame | None = None
+_WORKER_PARAMS: ScenarioParams | None = None
+
+
+def _init_mc_worker(df_payload: bytes, params_payload: dict) -> None:
+    global _WORKER_DF, _WORKER_PARAMS
+    _WORKER_DF = pd.read_pickle(io.BytesIO(df_payload))
+    _WORKER_PARAMS = ScenarioParams.model_validate(params_payload)
+
+
+def _run_one_from_worker(seed: int) -> Tuple[List[dict], Dict[date, dict], Optional[dict]]:
+    if _WORKER_DF is None or _WORKER_PARAMS is None:
+        raise RuntimeError("MC worker is not initialized")
+    return run_one(_WORKER_DF, _WORKER_PARAMS, seed)
+
+
 def _to_series(rows: List[dict]) -> ForecastSeries:
     pts = [ForecastPoint(**r) for r in rows]
     return ForecastSeries(points=pts)
@@ -220,50 +238,51 @@ def _percentile_series(runs: List[List[dict]], q: float) -> List[dict]:
         out.append(base)
     return out
 
-def run_forecast(df: pd.DataFrame, params: ScenarioParams) -> ForecastResult:
-    runs = []
-    events_accum: Dict[date, dict] = {}
-    future_points = []
+def _accumulate_events(events_accum: Dict[date, dict], batch_events: Dict[date, dict]) -> None:
+    for month, event_item in batch_events.items():
+        if month not in events_accum:
+            events_accum[month] = event_item.copy()
+            continue
+        for key in ("calvings", "dryoffs", "culls", "purchases_in", "heifer_intros"):
+            events_accum[month][key] += event_item[key]
 
-    for i in range(params.mc_runs):
-        seed = params.seed + i * 9973
-        series, events, future_point = run_one(df, params, seed)
-        runs.append(series)
-        future_points.append(future_point)
 
-        # accumulate events (sum across MC runs, then average later)
-        for m, e in events.items():
-            if m not in events_accum:
-                events_accum[m] = e.copy()
-            else:
-                for k in ("calvings", "dryoffs", "culls", "purchases_in", "heifer_intros"):
-                    events_accum[m][k] += e[k]
+def _build_result_from_runs(
+    *,
+    runs: List[List[dict]],
+    events_accum: Dict[date, dict],
+    completed_runs: int,
+    params: ScenarioParams,
+) -> ForecastResult:
+    events_list: list[EventsByMonth] = []
+    event_divider = max(1, completed_runs)
 
-    # average events if MC
-    events_list = []
-    for m in sorted(events_accum.keys()):
-        e = events_accum[m]
-        if params.mc_runs > 1:
-            for k in ("calvings", "dryoffs", "culls", "purchases_in", "heifer_intros"):
-                e[k] = int(round(e[k] / params.mc_runs))
-        events_list.append(EventsByMonth(**e))
+    for month in sorted(events_accum.keys()):
+        event_item = events_accum[month].copy()
+        if completed_runs > 1:
+            for key in ("calvings", "dryoffs", "culls", "purchases_in", "heifer_intros"):
+                event_item[key] = int(round(event_item[key] / event_divider))
+        events_list.append(EventsByMonth(**event_item))
 
-    if params.mc_runs == 1:
+    if completed_runs == 1:
         p50 = _to_series(runs[0])
-        fp = ForecastPoint(**future_points[0]) if future_points[0] is not None else None
+        fp = None
+        if params.future_date is not None:
+            for point in runs[0]:
+                if point["date"] == params.future_date:
+                    fp = ForecastPoint(**point)
+                    break
         return ForecastResult(series_p50=p50, events=events_list, future_point=fp)
 
     p50_rows = _percentile_series(runs, 50)
     p10_rows = _percentile_series(runs, 10)
     p90_rows = _percentile_series(runs, 90)
 
-    # future point: take p50 for avg_days_in_milk, and counts from first
     fp = None
     if params.future_date is not None:
-        # locate in p50_rows
-        for r in p50_rows:
-            if r["date"] == params.future_date:
-                fp = ForecastPoint(**r)
+        for row in p50_rows:
+            if row["date"] == params.future_date:
+                fp = ForecastPoint(**row)
                 break
 
     return ForecastResult(
@@ -272,4 +291,72 @@ def run_forecast(df: pd.DataFrame, params: ScenarioParams) -> ForecastResult:
         series_p90=_to_series(p90_rows),
         events=events_list,
         future_point=fp,
+    )
+
+
+def run_forecast(
+    df: pd.DataFrame,
+    params: ScenarioParams,
+    *,
+    parallel_enabled: bool = False,
+    max_processes: int = 4,
+    batch_size: int = 8,
+    progress_callback: ProgressCallback | None = None,
+) -> ForecastResult:
+    runs: list[list[dict]] = []
+    events_accum: Dict[date, dict] = {}
+    safe_batch_size = max(1, batch_size)
+    total_runs = params.mc_runs
+    completed_runs = 0
+
+    use_parallel = parallel_enabled and total_runs >= 2 and max_processes > 1
+    if use_parallel:
+        process_count = max(1, min(max_processes, total_runs))
+        if process_count <= 1:
+            use_parallel = False
+
+    def on_batch_done(batch_results: list[Tuple[List[dict], Dict[date, dict], Optional[dict]]]) -> None:
+        nonlocal completed_runs
+        for series_rows, batch_events, _future_point in batch_results:
+            runs.append(series_rows)
+            _accumulate_events(events_accum, batch_events)
+            completed_runs += 1
+        if progress_callback and completed_runs > 0:
+            partial = _build_result_from_runs(
+                runs=runs,
+                events_accum=events_accum,
+                completed_runs=completed_runs,
+                params=params,
+            )
+            progress_callback(completed_runs, total_runs, partial)
+
+    if use_parallel:
+        params_payload = params.model_dump(mode="json")
+        df_buffer = io.BytesIO()
+        df.to_pickle(df_buffer)
+        df_payload = df_buffer.getvalue()
+        all_seeds = [params.seed + i * 9973 for i in range(total_runs)]
+
+        with ProcessPoolExecutor(
+            max_workers=process_count,
+            initializer=_init_mc_worker,
+            initargs=(df_payload, params_payload),
+        ) as pool:
+            for start in range(0, total_runs, safe_batch_size):
+                seed_batch = all_seeds[start : start + safe_batch_size]
+                batch_results = list(pool.map(_run_one_from_worker, seed_batch))
+                on_batch_done(batch_results)
+    else:
+        for start in range(0, total_runs, safe_batch_size):
+            batch_results: list[Tuple[List[dict], Dict[date, dict], Optional[dict]]] = []
+            for i in range(start, min(start + safe_batch_size, total_runs)):
+                seed = params.seed + i * 9973
+                batch_results.append(run_one(df, params, seed))
+            on_batch_done(batch_results)
+
+    return _build_result_from_runs(
+        runs=runs,
+        events_accum=events_accum,
+        completed_runs=max(1, completed_runs),
+        params=params,
     )

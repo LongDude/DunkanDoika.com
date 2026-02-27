@@ -48,11 +48,27 @@ export type ForecastJobInfo = {
   scenario_id?: string | null
   status: ForecastJobStatus
   progress_pct: number
+  completed_runs: number
+  total_runs: number
   error_message?: string | null
   queued_at: string
   started_at?: string | null
   finished_at?: string | null
   expires_at?: string | null
+}
+
+export type ForecastJobWsEventType = 'job_progress' | 'job_succeeded' | 'job_failed' | 'heartbeat'
+
+export type ForecastJobWsEvent = {
+  type: ForecastJobWsEventType
+  job_id: string
+  status?: ForecastJobStatus
+  progress_pct?: number
+  completed_runs?: number
+  total_runs?: number
+  partial_result?: ForecastResult | null
+  error_message?: string | null
+  ts: string
 }
 
 export type CreateForecastJobResponse = {

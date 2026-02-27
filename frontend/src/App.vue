@@ -26,6 +26,13 @@
         <p v-if="workspace.runLayer.running.value" class="muted">
           {{ t('run.progress') }}: {{ workspace.runLayer.currentProgress.value }}%
         </p>
+        <p v-if="workspace.runLayer.running.value && workspace.runLayer.totalRuns.value > 0" class="muted">
+          {{ t('run.completedRuns') }}:
+          {{ workspace.runLayer.completedRuns.value }}/{{ workspace.runLayer.totalRuns.value }}
+        </p>
+        <p v-if="workspace.runLayer.running.value" class="muted">
+          {{ t('run.channel') }}: {{ runChannelLabel }}
+        </p>
         <p v-if="workspace.runLayer.lastRunAt.value" class="muted">
           {{ t('run.lastRunAt') }}: {{ formattedLastRunAt }}
         </p>
@@ -155,6 +162,10 @@ const runStatusLabel = computed(() => {
   const status = workspace.runLayer.status.value
   return t(`run.${status}`)
 })
+
+const runChannelLabel = computed(() =>
+  workspace.runLayer.transportMode.value === 'ws' ? t('run.liveWs') : t('run.fallbackPolling')
+)
 
 const formattedLastRunAt = computed(() => formatDate(workspace.runLayer.lastRunAt.value, currentLocale.value))
 
