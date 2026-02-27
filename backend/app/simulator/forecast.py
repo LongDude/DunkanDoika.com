@@ -8,7 +8,6 @@ import copy
 import numpy as np
 import pandas as pd
 
-from app.storage.datasets import Dataset
 from app.api.schemas import ScenarioParams, ForecastResult, ForecastSeries, ForecastPoint, EventsByMonth
 from app.simulator.types import Animal, Status, EventType
 from app.simulator.engine import SimulationEngine, EngineConfig
@@ -221,8 +220,7 @@ def _percentile_series(runs: List[List[dict]], q: float) -> List[dict]:
         out.append(base)
     return out
 
-def run_forecast(ds: Dataset, params: ScenarioParams) -> ForecastResult:
-    df = ds.df
+def run_forecast(df: pd.DataFrame, params: ScenarioParams) -> ForecastResult:
     runs = []
     events_accum: Dict[date, dict] = {}
     future_points = []

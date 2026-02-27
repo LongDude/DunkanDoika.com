@@ -1,5 +1,7 @@
 import type {
+  CreateForecastJobResponse,
   DatasetUploadResponse,
+  ForecastJobInfo,
   ForecastResult,
   ScenarioDetail,
   ScenarioInfo,
@@ -8,10 +10,28 @@ import type {
 
 const API = import.meta.env.VITE_API_BASE_URL ?? '/api'
 
+async function extractErrorMessage(resp: Response): Promise<string> {
+  let message = `${resp.status} ${resp.statusText}`
+  try {
+    const payload = await resp.json()
+    const detail = payload?.detail
+    if (typeof detail === 'string') {
+      message = detail
+    } else if (detail && typeof detail.message === 'string') {
+      message = detail.message
+    } else if (typeof payload?.message === 'string') {
+      message = payload.message
+    }
+  } catch {
+    const text = await resp.text()
+    if (text) message = text
+  }
+  return message
+}
+
 async function unwrapJson<T>(resp: Response): Promise<T> {
   if (!resp.ok) {
-    const message = await resp.text()
-    throw new Error(message || `${resp.status} ${resp.statusText}`)
+    throw new Error(await extractErrorMessage(resp))
   }
   return resp.json() as Promise<T>
 }
@@ -23,32 +43,34 @@ export async function uploadDataset(file: File): Promise<DatasetUploadResponse> 
   return unwrapJson<DatasetUploadResponse>(resp)
 }
 
-export async function runForecast(params: ScenarioParams): Promise<ForecastResult> {
-  const resp = await fetch(`${API}/forecast/run`, {
+export async function createForecastJob(params: ScenarioParams): Promise<CreateForecastJobResponse> {
+  const resp = await fetch(`${API}/forecast/jobs`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(params),
   })
+  return unwrapJson<CreateForecastJobResponse>(resp)
+}
+
+export async function getForecastJob(jobId: string): Promise<ForecastJobInfo> {
+  const resp = await fetch(`${API}/forecast/jobs/${jobId}`)
+  return unwrapJson<ForecastJobInfo>(resp)
+}
+
+export async function getForecastResult(jobId: string): Promise<ForecastResult> {
+  const resp = await fetch(`${API}/forecast/jobs/${jobId}/result`)
   return unwrapJson<ForecastResult>(resp)
 }
 
-export async function exportForecastCsv(params: ScenarioParams): Promise<Blob> {
-  const resp = await fetch(`${API}/forecast/export/csv`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(params),
-  })
-  if (!resp.ok) throw new Error(await resp.text())
+export async function exportForecastCsvByJob(jobId: string): Promise<Blob> {
+  const resp = await fetch(`${API}/forecast/jobs/${jobId}/export/csv`)
+  if (!resp.ok) throw new Error(await extractErrorMessage(resp))
   return resp.blob()
 }
 
-export async function exportForecastXlsx(params: ScenarioParams): Promise<Blob> {
-  const resp = await fetch(`${API}/forecast/export/xlsx`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(params),
-  })
-  if (!resp.ok) throw new Error(await resp.text())
+export async function exportForecastXlsxByJob(jobId: string): Promise<Blob> {
+  const resp = await fetch(`${API}/forecast/jobs/${jobId}/export/xlsx`)
+  if (!resp.ok) throw new Error(await extractErrorMessage(resp))
   return resp.blob()
 }
 
@@ -71,7 +93,7 @@ export async function loadScenario(id: string): Promise<ScenarioDetail> {
   return unwrapJson<ScenarioDetail>(resp)
 }
 
-export async function runScenario(id: string): Promise<ForecastResult> {
+export async function runScenario(id: string): Promise<CreateForecastJobResponse> {
   const resp = await fetch(`${API}/scenarios/${id}/run`, { method: 'POST' })
-  return unwrapJson<ForecastResult>(resp)
+  return unwrapJson<CreateForecastJobResponse>(resp)
 }

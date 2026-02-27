@@ -40,6 +40,25 @@ export type ForecastResult = {
   future_point?: ForecastPoint | null
 }
 
+export type ForecastJobStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'canceled'
+
+export type ForecastJobInfo = {
+  job_id: string
+  dataset_id: string
+  scenario_id?: string | null
+  status: ForecastJobStatus
+  progress_pct: number
+  error_message?: string | null
+  queued_at: string
+  started_at?: string | null
+  finished_at?: string | null
+  expires_at?: string | null
+}
+
+export type CreateForecastJobResponse = {
+  job: ForecastJobInfo
+}
+
 export type PurchaseItem = {
   date_in: string
   count: number

@@ -1,21 +1,121 @@
 services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "${POSTGRES_PORT}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "${REDIS_PORT}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    ports:
+      - "${MINIO_PORT}:9000"
+      - "${MINIO_CONSOLE_PORT}:9001"
+    volumes:
+      - minio_data:/data
+
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      until mc alias set local http://minio:9000 ${MINIO_ROOT_USER} ${MINIO_ROOT_PASSWORD}; do sleep 2; done;
+      mc mb -p local/${MINIO_BUCKET_DATASETS} || true;
+      mc mb -p local/${MINIO_BUCKET_RESULTS} || true;
+      mc mb -p local/${MINIO_BUCKET_EXPORTS} || true;
+      mc ilm rule add --expire-days ${EXPORT_RETENTION_DAYS} local/${MINIO_BUCKET_RESULTS} || true;
+      mc ilm rule add --expire-days ${EXPORT_RETENTION_DAYS} local/${MINIO_BUCKET_EXPORTS} || true;
+      exit 0;
+      "
+
   backend:
     build:
       context: ./backend
+    command: /bin/sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
+      MINIO_SECURE: ${MINIO_SECURE}
+      MINIO_BUCKET_DATASETS: ${MINIO_BUCKET_DATASETS}
+      MINIO_BUCKET_RESULTS: ${MINIO_BUCKET_RESULTS}
+      MINIO_BUCKET_EXPORTS: ${MINIO_BUCKET_EXPORTS}
+      MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES}
+      ALLOWED_CORS_ORIGINS: ${ALLOWED_CORS_ORIGINS}
+      STUCK_JOB_TIMEOUT_MINUTES: ${STUCK_JOB_TIMEOUT_MINUTES}
     ports:
-      - "8000:8000"
-    volumes:
-      - backend_uploads:/app/app/data/uploads
+      - "${BACKEND_PORT}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_started
+      minio-init:
+        condition: service_completed_successfully
+
+  backend-worker:
+    build:
+      context: ./backend
+    command: /bin/sh -c "alembic upgrade head && python -m app.worker"
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
+      MINIO_SECURE: ${MINIO_SECURE}
+      MINIO_BUCKET_DATASETS: ${MINIO_BUCKET_DATASETS}
+      MINIO_BUCKET_RESULTS: ${MINIO_BUCKET_RESULTS}
+      MINIO_BUCKET_EXPORTS: ${MINIO_BUCKET_EXPORTS}
+      STUCK_JOB_TIMEOUT_MINUTES: ${STUCK_JOB_TIMEOUT_MINUTES}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_started
+      minio-init:
+        condition: service_completed_successfully
 
   frontend:
     build:
       context: ./frontend
       args:
-        VITE_API_BASE_URL: /api
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL}
     ports:
-      - "5173:80"
+      - "${FRONTEND_PORT}:80"
     depends_on:
       - backend
 
 volumes:
-  backend_uploads:
+  postgres_data:
+  minio_data:

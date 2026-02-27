@@ -128,7 +128,9 @@ export const messages = {
     },
     run: {
       idle: 'Ready to run',
+      queued: 'Job is queued',
       running: 'Running simulation...',
+      progress: 'Progress',
       success: 'Forecast completed',
       error: 'Forecast failed',
       lastRunAt: 'Last run',
@@ -202,6 +204,7 @@ export const messages = {
       saveFailed: 'Save failed',
       loadFailed: 'Load failed',
       runFailed: 'Run failed',
+      jobTimeout: 'Forecast job timed out',
     },
     aria: {
       mainNavigation: 'Main navigation',

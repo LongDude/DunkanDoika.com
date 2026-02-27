@@ -1,56 +1,83 @@
 # 未経産牛の乳生産能力の予測
 Hackaton 2026 - 未経産牛の乳生産能力の予測
 
-Веб‑продукт для прогноза показателя **«Средние дни доения»** на горизонте до 3 лет.
+Backend-first architecture for dairy herd forecasting with asynchronous simulation jobs.
 
-Внутри — **агентная модель** (каждое животное — агент), **событийная симуляция** (отёл/запуск/осеменение/выбытие), рождение телят (самки добавляются в стадо), сценарии покупки нетелей, авто‑компенсация выбытия через ввод собственных нетелей (≈30%/год), Монте‑Карло (p10/p50/p90).
+## Stack
 
-## Run backend
+- Backend: FastAPI
+- Database: PostgreSQL
+- Queue: Redis + RQ
+- Object storage: MinIO
+- Frontend: Vue 3 + Vite
 
-```bash
-cd backend
-python -m venv .venv
-# Windows: .venv\Scripts\activate
-source .venv/bin/activate
-pip install -r requirements.txt
-uvicorn app.main:app --reload
-```
-
-Backend docs: http://127.0.0.1:8000/docs
-
-### Основные эндпоинты
-
-- `POST /api/datasets/upload` — загрузка CSV
-- `POST /api/forecast/run` — выполнить прогноз
-- `POST /api/forecast/export/csv` — экспорт CSV
-- `POST /api/forecast/export/xlsx` — экспорт XLSX
-- `POST /api/scenarios` — сохранить сценарий
-- `GET /api/scenarios` — список сценариев
-- `GET /api/scenarios/{id}` — получить сценарий
-- `POST /api/scenarios/{id}/run` — выполнить сценарий
-
-## Run frontend
+## Local Run (Docker Compose)
 
 ```bash
-cd frontend
-npm i
-npm run dev
-```
-
-Frontend: http://127.0.0.1:5173
-
-### UI умеет
-- редактировать параметры модели (сервис‑период, осеменение тёлок, выбытие, ввод нетелей)
-- задавать покупки нетелей таблицей
-- сохранять/загружать сценарии
-- сравнивать сценарии (оверлей p50)
-- экспортировать результаты в CSV/XLSX
-
-## Run with Docker
-
-```bash
+cp .env.example .env
 docker compose up --build
 ```
 
-- Frontend: http://127.0.0.1:5173
-- Backend API docs: http://127.0.0.1:8000/docs
+Services:
+
+- Frontend: `http://127.0.0.1:5173`
+- Backend API docs: `http://127.0.0.1:8000/docs`
+- MinIO console: `http://127.0.0.1:9001`
+
+## Backend Environment
+
+Key variables:
+
+- `DATABASE_URL`
+- `REDIS_URL`
+- `MINIO_ENDPOINT`
+- `MINIO_ACCESS_KEY`
+- `MINIO_SECRET_KEY`
+- `MINIO_SECURE`
+- `MINIO_BUCKET_DATASETS`
+- `MINIO_BUCKET_RESULTS`
+- `MINIO_BUCKET_EXPORTS`
+- `MAX_UPLOAD_BYTES`
+- `ALLOWED_CORS_ORIGINS`
+- `STUCK_JOB_TIMEOUT_MINUTES`
+
+## API Overview (Async Forecast)
+
+### Health
+
+- `GET /api/health/live`
+- `GET /api/health/ready`
+
+### Datasets
+
+- `POST /api/datasets/upload`
+- `GET /api/datasets/{dataset_id}`
+
+### Scenarios
+
+- `POST /api/scenarios`
+- `GET /api/scenarios`
+- `GET /api/scenarios/{scenario_id}`
+- `POST /api/scenarios/{scenario_id}/run` -> creates forecast job
+
+### Forecast Jobs
+
+- `POST /api/forecast/jobs`
+- `GET /api/forecast/jobs/{job_id}`
+- `GET /api/forecast/jobs/{job_id}/result`
+- `GET /api/forecast/jobs/{job_id}/export/csv`
+- `GET /api/forecast/jobs/{job_id}/export/xlsx`
+
+### Deprecated Sync Endpoints
+
+These return `410 Gone`:
+
+- `POST /api/forecast/run`
+- `POST /api/forecast/export/csv`
+- `POST /api/forecast/export/xlsx`
+
+## Notes
+
+- Forecast calculations are executed only by `backend-worker`.
+- Datasets, forecast results, and exports are stored in MinIO.
+- Scenario and job metadata are persisted in PostgreSQL.

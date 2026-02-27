@@ -37,9 +37,7 @@ export function useForecastWorkspace() {
   })
 
   const exportDisabledReason = computed<DisabledReason>(() => {
-    if (!datasetId.value) return disabled(true, t('disabledReasons.datasetRequired'))
-    if (editor.hasErrors.value) return disabled(true, t('disabledReasons.fixValidationErrors'))
-    if (runLayer.running.value) return disabled(true, t('disabledReasons.alreadyRunning'))
+    if (!runLayer.lastSuccessfulJob.value) return disabled(true, t('disabledReasons.runRequired'))
     return disabled(false, null)
   })
 
@@ -62,7 +60,7 @@ export function useForecastWorkspace() {
       editor.resetForNewDataset(info.report_date_suggested ?? '')
       await editor.refreshScenarioList()
       comparison.clear()
-      runLayer.result.value = null
+      runLayer.reset()
     } catch (err) {
       alert(`${t('alerts.uploadFailed')}: ${err instanceof Error ? err.message : ''}`)
     }
@@ -120,7 +118,7 @@ export function useForecastWorkspace() {
   async function exportCsv() {
     if (exportDisabledReason.value.disabled) return
     try {
-      await runLayer.exportCsv(editor.buildParams())
+      await runLayer.exportCsv()
     } catch (err) {
       alert(`${t('alerts.exportFailed')}: ${err instanceof Error ? err.message : ''}`)
     }
@@ -129,7 +127,7 @@ export function useForecastWorkspace() {
   async function exportXlsx() {
     if (exportDisabledReason.value.disabled) return
     try {
-      await runLayer.exportXlsx(editor.buildParams())
+      await runLayer.exportXlsx()
     } catch (err) {
       alert(`${t('alerts.exportFailed')}: ${err instanceof Error ? err.message : ''}`)
     }

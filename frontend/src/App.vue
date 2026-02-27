@@ -23,6 +23,9 @@
       <section class="card run-status-card">
         <h2>{{ t('screen.forecast') }}</h2>
         <p>{{ runStatusLabel }}</p>
+        <p v-if="workspace.runLayer.running.value" class="muted">
+          {{ t('run.progress') }}: {{ workspace.runLayer.currentProgress.value }}%
+        </p>
         <p v-if="workspace.runLayer.lastRunAt.value" class="muted">
           {{ t('run.lastRunAt') }}: {{ formattedLastRunAt }}
         </p>

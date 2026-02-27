@@ -8,6 +8,8 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir --retries 10 --timeout 60 -r requirements.txt
 
+COPY alembic.ini ./alembic.ini
+COPY alembic ./alembic
 COPY app ./app
 
 EXPOSE 8000
