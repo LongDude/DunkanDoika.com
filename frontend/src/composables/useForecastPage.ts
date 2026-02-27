@@ -63,7 +63,7 @@ export function useForecastPage(): ForecastPage {
   const futureDate = ref<string>('')
   const running = ref(false)
 
-  const scenarioName = ref('Baseline')
+  const scenarioName = ref(t('common.baseline'))
   const saving = ref(false)
   const scenarioList = ref<ScenarioInfo[]>([])
 

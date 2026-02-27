@@ -23,7 +23,7 @@
     <div class="grid4 top-form">
       <label>
         {{ t('scenario.reportDate') }}
-        <input type="date" v-model="page.reportDate.value" />
+        <input type="date" :lang="inputDateLocale" v-model="page.reportDate.value" />
       </label>
       <label>
         {{ t('scenario.horizonMonths') }}
@@ -31,7 +31,7 @@
       </label>
       <label>
         {{ t('scenario.futureDateOptional') }}
-        <input type="date" v-model="page.futureDate.value" />
+        <input type="date" :lang="inputDateLocale" v-model="page.futureDate.value" />
       </label>
       <label>
         {{ t('scenario.mcRuns') }}
@@ -61,9 +61,9 @@
           </label>
           <label>{{ t('scenario.grouping') }}
             <select v-model="page.cullGrouping.value">
-              <option value="lactation">lactation</option>
-              <option value="lactation_status">lactation_status</option>
-              <option value="age_band">age_band</option>
+              <option value="lactation">{{ t('scenario.groupingLactation') }}</option>
+              <option value="lactation_status">{{ t('scenario.groupingLactationStatus') }}</option>
+              <option value="age_band">{{ t('scenario.groupingAgeBand') }}</option>
             </select>
           </label>
           <label>{{ t('scenario.fallbackMonthlyHazard') }} <input type="number" step="0.001" v-model.number="page.cullFallback.value" min="0" max="0.2" /></label>
@@ -100,9 +100,9 @@
           </thead>
           <tbody>
             <tr v-for="(purchase, idx) in page.purchases.value" :key="idx">
-              <td><input type="date" v-model="purchase.date_in" /></td>
+              <td><input type="date" :lang="inputDateLocale" v-model="purchase.date_in" /></td>
               <td><input type="number" min="1" max="5000" v-model.number="purchase.count" /></td>
-              <td><input type="date" v-model="purchase.expected_calving_date" /></td>
+              <td><input type="date" :lang="inputDateLocale" v-model="purchase.expected_calving_date" /></td>
               <td><input type="number" min="0" max="280" v-model.number="purchase.days_pregnant" /></td>
               <td><button @click="page.removePurchase(idx)">{{ t('scenario.delete') }}</button></td>
             </tr>
@@ -121,7 +121,7 @@
               <th>{{ t('scenario.created') }}</th>
               <th>{{ t('scenario.reportDate') }}</th>
               <th>{{ t('scenario.horizon') }}</th>
-              <th></th>
+              <th>{{ t('scenario.actions') }}</th>
             </tr>
           </thead>
           <tbody>
@@ -143,9 +143,12 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { ForecastPage } from '../composables/useForecastPage'
 
 defineProps<{ page: ForecastPage }>()
-const { t } = useI18n()
+const { t, locale } = useI18n()
+
+const inputDateLocale = computed(() => (locale.value === 'ru' ? 'ru-RU' : 'en-US'))
 </script>
