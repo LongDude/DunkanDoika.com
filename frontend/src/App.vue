@@ -413,6 +413,10 @@ function renderCharts() {
   renderHerdChart()
 }
 
+function toNumberOrNull(v: number | null | undefined) {
+  return v === null || v === undefined ? null : Number(v)
+}
+
 function renderDimChart() {
   if (!result.value || !canvasDim.value) return
   const pts = result.value.series_p50.points
@@ -422,22 +426,22 @@ function renderDimChart() {
 
   // optional band for active result
   if (result.value.series_p10 && result.value.series_p90) {
-    const p10 = result.value.series_p10.points.map(p => p.avg_days_in_milk)
-    const p90 = result.value.series_p90.points.map(p => p.avg_days_in_milk)
+    const p10 = result.value.series_p10.points.map(p => toNumberOrNull(p.avg_days_in_milk))
+    const p90 = result.value.series_p90.points.map(p => toNumberOrNull(p.avg_days_in_milk))
     datasets.push({ label: 'p10', data: p10, pointRadius: 0, borderWidth: 1, fill: false })
     datasets.push({ label: 'p90', data: p90, pointRadius: 0, borderWidth: 1, fill: '-1' })
   }
 
   datasets.push({
     label: `${scenarioName.value} (p50)`,
-    data: pts.map(p => p.avg_days_in_milk),
+    data: pts.map(p => toNumberOrNull(p.avg_days_in_milk)),
     tension: 0.25,
     pointRadius: 0,
   })
 
   for (const c of compare.value) {
     const cpts = c.res.series_p50.points
-    datasets.push({ label: `${c.label} (p50)`, data: cpts.map(p => p.avg_days_in_milk), tension: 0.25, pointRadius: 0 })
+    datasets.push({ label: `${c.label} (p50)`, data: cpts.map(p => toNumberOrNull(p.avg_days_in_milk)), tension: 0.25, pointRadius: 0 })
   }
 
   if (chartDim) chartDim.destroy()
@@ -446,7 +450,8 @@ function renderDimChart() {
     data: { labels, datasets },
     options: {
       responsive: true,
-      parsing: false,
+      parsing: true,
+      spanGaps: true,
       interaction: { mode: 'index', intersect: false },
       scales: { x: { display: true }, y: { display: true } },
     },
@@ -458,10 +463,10 @@ function renderHerdChart() {
   const pts = result.value.series_p50.points
   const labels = pts.map(p => p.date)
 
-  const milking = pts.map(p => p.milking_count)
-  const dry = pts.map(p => p.dry_count)
-  const heifer = pts.map(p => p.heifer_count)
-  const preg = pts.map(p => p.pregnant_heifer_count)
+  const milking = pts.map(p => Number(p.milking_count))
+  const dry = pts.map(p => Number(p.dry_count))
+  const heifer = pts.map(p => Number(p.heifer_count))
+  const preg = pts.map(p => Number(p.pregnant_heifer_count))
 
   if (chartHerd) chartHerd.destroy()
   chartHerd = new Chart(canvasHerd.value, {
@@ -469,19 +474,19 @@ function renderHerdChart() {
     data: {
       labels,
       datasets: [
-        { label: 'Milking', data: milking, fill: true, pointRadius: 0, stack: 's' },
-        { label: 'Dry', data: dry, fill: true, pointRadius: 0, stack: 's' },
-        { label: 'Heifer', data: heifer, fill: true, pointRadius: 0, stack: 's' },
-        { label: 'Pregnant heifer', data: preg, fill: true, pointRadius: 0, stack: 's' },
+        { label: 'Milking', data: milking, pointRadius: 0, tension: 0.2 },
+        { label: 'Dry', data: dry, pointRadius: 0, tension: 0.2 },
+        { label: 'Heifer', data: heifer, pointRadius: 0, tension: 0.2 },
+        { label: 'Pregnant heifer', data: preg, pointRadius: 0, tension: 0.2 },
       ],
     },
     options: {
       responsive: true,
-      parsing: false,
+      parsing: true,
       interaction: { mode: 'index', intersect: false },
       scales: {
         x: { display: true },
-        y: { display: true, stacked: true },
+        y: { display: true },
       },
     },
   })
