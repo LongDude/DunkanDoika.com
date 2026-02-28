@@ -1,5 +1,6 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { v4 as uuidv4 } from 'uuid'
 import type { CompareItem, ComparisonDeltaRow, ForecastResult } from '../types/forecast'
 
 const MAX_COMPARE_ITEMS = 4
@@ -19,7 +20,7 @@ export function useComparison() {
     if (items.value.length >= MAX_COMPARE_ITEMS) {
       return { ok: false, reason: t('comparison.maxItems', { max: MAX_COMPARE_ITEMS }) }
     }
-    const id = crypto.randomUUID()
+    const id = uuidv4()
     items.value.push({ id, label, res })
     if (!baseId.value) baseId.value = id
     return { ok: true, reason: null }
