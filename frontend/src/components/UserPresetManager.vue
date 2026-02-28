@@ -3,10 +3,7 @@
     <h2>{{ t('presets.title') }}</h2>
 
     <div class="row">
-      <label class="preset-name-field">
-        {{ t('presets.newName') }}
-        <input v-model.trim="newPresetName" :placeholder="t('presets.namePlaceholder')" />
-      </label>
+      <input v-model.trim="newPresetName" :placeholder="t('presets.namePlaceholder')" />
       <button :disabled="editor.presetsSaving.value" @click="createPreset">
         {{ t('presets.createFromCurrent') }}
       </button>
@@ -19,15 +16,15 @@
     <p v-else-if="editor.userPresets.value.length === 0" class="muted">{{ t('presets.empty') }}</p>
 
     <div v-else class="table-wrap">
-      <table>
+      <table class="presets-table">
         <thead>
           <tr>
-            <th>
+            <th class="presets-col-check">
               <input type="checkbox" :checked="allSelected" @change="toggleSelectAll" />
             </th>
-            <th>{{ t('presets.name') }}</th>
-            <th>{{ t('presets.updatedAt') }}</th>
-            <th>{{ t('common.actions') }}</th>
+            <th class="presets-col-name">{{ t('presets.name') }}</th>
+            <th class="presets-col-updated">{{ t('presets.updatedAt') }}</th>
+            <th class="presets-col-actions">{{ t('common.actions') }}</th>
           </tr>
         </thead>
         <tbody>
@@ -41,11 +38,13 @@
             </td>
             <td>{{ preset.name }}</td>
             <td>{{ formatDate(preset.updated_at, localeAsApp) }}</td>
-            <td class="row-actions">
-              <button @click="applyPreset(preset.preset_id)">{{ t('presets.apply') }}</button>
-              <button @click="updatePresetParams(preset.preset_id)">{{ t('presets.updateFromCurrent') }}</button>
-              <button @click="renamePreset(preset.preset_id, preset.name)">{{ t('presets.rename') }}</button>
-              <button @click="deleteOne(preset.preset_id)">{{ t('common.remove') }}</button>
+            <td class="presets-actions-cell">
+              <div class="row-actions preset-actions">
+                <button @click="applyPreset(preset.preset_id)">{{ t('presets.apply') }}</button>
+                <button @click="updatePresetParams(preset.preset_id)">{{ t('presets.updateFromCurrent') }}</button>
+                <button @click="renamePreset(preset.preset_id, preset.name)">{{ t('presets.rename') }}</button>
+                <button @click="deleteOne(preset.preset_id)">{{ t('common.remove') }}</button>
+              </div>
             </td>
           </tr>
         </tbody>
