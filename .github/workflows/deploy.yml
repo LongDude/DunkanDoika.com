@@ -54,11 +54,17 @@ jobs:
           MC_MAX_PROCESSES=${{ vars.MC_MAX_PROCESSES }}
           MC_BATCH_SIZE=${{ vars.MC_BATCH_SIZE }}
           WS_HEARTBEAT_SECONDS=${{ vars.WS_HEARTBEAT_SECONDS }}
+          DIM_MODE=${{ vars.DIM_MODE }}
+          SIMULATION_VERSION=${{ vars.SIMULATION_VERSION }}
+          SSO_JWT_SECRET=${{ secrets.SSO_JWT_SECRET }}
+          SSO_JWT_ALGORITHMS=${{ vars.SSO_JWT_ALGORITHMS }}
+          SSO_USER_ID_CLAIM=${{ vars.SSO_USER_ID_CLAIM }}
           
           BACKEND_PORT=${{ vars.BACKEND_PORT }}
           FRONTEND_PORT=${{ vars.FRONTEND_PORT }}
           VITE_API_BASE_URL=${{ vars.VITE_API_BASE_URL }}
           VITE_PROXY_TARGET=${{ vars.VITE_PROXY_TARGET }}
+          VITE_SSO_API_BASE_URL=${{ vars.VITE_SSO_API_BASE_URL }}
           EOF
       
       - name: Pull latest Docker images
