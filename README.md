@@ -23,7 +23,7 @@ docker compose up --build
 Services:
 
 - Frontend: `http://127.0.0.1:5173`
-- Backend API docs: `http://127.0.0.1:8000/docs`
+- Backend API docs: `http://127.0.0.1:8081/docs`
 - MinIO console: `http://127.0.0.1:9001`
 
 ## Backend Environment
