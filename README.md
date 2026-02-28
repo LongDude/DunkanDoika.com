@@ -3,7 +3,7 @@ Hackaton 2026 - 未経産牛の乳生産能力の予測
 
 Backend-first architecture for dairy herd forecasting with asynchronous simulation jobs.
 
-### [DunkanDoika (link)](dunkandoika.liveisfpv.ru)
+### [DunkanDoika (link)](http://dunkandoika.liveisfpv.ru:8080/)
 
 ## Stack
 
