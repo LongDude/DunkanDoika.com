@@ -25,39 +25,39 @@ jobs:
       - name: Create .env file
         run: |
           cat > .env << EOF
-          POSTGRES_DB=${{ secrets.POSTGRES_DB }}
+          POSTGRES_DB=${{ vars.POSTGRES_DB }}
           POSTGRES_USER=${{ secrets.POSTGRES_USER }}
           POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
-          POSTGRES_PORT=${{ secrets.POSTGRES_PORT }}
+          POSTGRES_PORT=${{ vars.POSTGRES_PORT }}
           
-          REDIS_PORT=${{ secrets.REDIS_PORT }}
+          REDIS_PORT=${{ vars.REDIS_PORT }}
           
           MINIO_ROOT_USER=${{ secrets.MINIO_ROOT_USER }}
           MINIO_ROOT_PASSWORD=${{ secrets.MINIO_ROOT_PASSWORD }}
-          MINIO_PORT=${{ secrets.MINIO_PORT }}
-          MINIO_CONSOLE_PORT=${{ secrets.MINIO_CONSOLE_PORT }}
-          MINIO_BUCKET_DATASETS=${{ secrets.MINIO_BUCKET_DATASETS }}
-          MINIO_BUCKET_RESULTS=${{ secrets.MINIO_BUCKET_RESULTS }}
-          MINIO_BUCKET_EXPORTS=${{ secrets.MINIO_BUCKET_EXPORTS }}
-          EXPORT_RETENTION_DAYS=${{ secrets.EXPORT_RETENTION_DAYS }}
+          MINIO_PORT=${{ vars.MINIO_PORT }}
+          MINIO_CONSOLE_PORT=${{ vars.MINIO_CONSOLE_PORT }}
+          MINIO_BUCKET_DATASETS=${{ vars.MINIO_BUCKET_DATASETS }}
+          MINIO_BUCKET_RESULTS=${{ vars.MINIO_BUCKET_RESULTS }}
+          MINIO_BUCKET_EXPORTS=${{ vars.MINIO_BUCKET_EXPORTS }}
+          EXPORT_RETENTION_DAYS=${{ vars.EXPORT_RETENTION_DAYS }}
           
-          DATABASE_URL=${{ secrets.DATABASE_URL }}
-          REDIS_URL=${{ secrets.REDIS_URL }}
-          MINIO_ENDPOINT=${{ secrets.MINIO_ENDPOINT }}
+          DATABASE_URL=postgresql+psycopg://${{ secrets.POSTGRES_USER }}:${{ secrets.POSTGRES_PASSWORD }}@postgres:${{ vars.POSTGRES_PORT }}/${{ vars.POSTGRES_DB }}
+          REDIS_URL=redis://redis:${{ vars.REDIS_PORT }}/0
+          MINIO_ENDPOINT=minio:${{ vars.MINIO_PORT }}
           MINIO_ACCESS_KEY=${{ secrets.MINIO_ACCESS_KEY }}
           MINIO_SECRET_KEY=${{ secrets.MINIO_SECRET_KEY }}
-          MINIO_SECURE=${{ secrets.MINIO_SECURE }}
-          MAX_UPLOAD_BYTES=${{ secrets.MAX_UPLOAD_BYTES }}
-          ALLOWED_CORS_ORIGINS=${{ secrets.ALLOWED_CORS_ORIGINS }}
-          STUCK_JOB_TIMEOUT_MINUTES=${{ secrets.STUCK_JOB_TIMEOUT_MINUTES }}
-          MC_PARALLEL_ENABLED=${{ secrets.MC_PARALLEL_ENABLED }}
-          MC_MAX_PROCESSES=${{ secrets.MC_MAX_PROCESSES }}
-          MC_BATCH_SIZE=${{ secrets.MC_BATCH_SIZE }}
-          WS_HEARTBEAT_SECONDS=${{ secrets.WS_HEARTBEAT_SECONDS }}
+          MINIO_SECURE=${{ vars.MINIO_SECURE }}
+          MAX_UPLOAD_BYTES=${{ vars.MAX_UPLOAD_BYTES }}
+          ALLOWED_CORS_ORIGINS=${{ vars.ALLOWED_CORS_ORIGINS }}
+          STUCK_JOB_TIMEOUT_MINUTES=${{ vars.STUCK_JOB_TIMEOUT_MINUTES }}
+          MC_PARALLEL_ENABLED=${{ vars.MC_PARALLEL_ENABLED }}
+          MC_MAX_PROCESSES=${{ vars.MC_MAX_PROCESSES }}
+          MC_BATCH_SIZE=${{ vars.MC_BATCH_SIZE }}
+          WS_HEARTBEAT_SECONDS=${{ vars.WS_HEARTBEAT_SECONDS }}
           
-          BACKEND_PORT=${{ secrets.BACKEND_PORT }}
-          FRONTEND_PORT=${{ secrets.FRONTEND_PORT }}
-          VITE_API_BASE_URL=${{ secrets.VITE_API_BASE_URL }}
+          BACKEND_PORT=${{ vars.BACKEND_PORT }}
+          FRONTEND_PORT=${{ vars.FRONTEND_PORT }}
+          VITE_API_BASE_URL=${{ vars.VITE_API_BASE_URL }}
           EOF
       
       - name: Pull latest Docker images
