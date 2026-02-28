@@ -47,6 +47,17 @@ function createDefaultFormState(reportDate: string): ScenarioFormState {
   }
 }
 
+function normalizeOptionalDate(value: string | null | undefined): string | null {
+  if (value === null || value === undefined) return null
+  const trimmed = String(value).trim()
+  return trimmed.length > 0 ? trimmed : null
+}
+
+function normalizeOptionalDays(value: number | null | undefined): number | null {
+  if (value === null || value === undefined) return null
+  return Number.isFinite(value) ? value : null
+}
+
 export function useScenarioEditor(options: ScenarioEditorOptions) {
   const { t } = useI18n()
 
@@ -198,7 +209,12 @@ export function useScenarioEditor(options: ScenarioEditorOptions) {
       heifer_insem: { ...form.value.heifer_insem },
       culling: { ...form.value.culling },
       replacement: { ...form.value.replacement },
-      purchases: form.value.purchases.map(x => ({ ...x })),
+      purchases: form.value.purchases.map(x => ({
+        date_in: x.date_in,
+        count: x.count,
+        expected_calving_date: normalizeOptionalDate(x.expected_calving_date),
+        days_pregnant: normalizeOptionalDays(x.days_pregnant),
+      })),
     }
   }
 

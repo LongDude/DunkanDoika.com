@@ -4,7 +4,7 @@ from datetime import date, datetime
 from enum import Enum
 from typing import Dict, List, Literal, Optional
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class PurchaseItem(BaseModel):
@@ -12,6 +12,20 @@ class PurchaseItem(BaseModel):
     count: int = Field(ge=1, le=5000)
     expected_calving_date: Optional[date] = None
     days_pregnant: Optional[int] = Field(default=None, ge=0, le=280)
+
+    @field_validator("expected_calving_date", mode="before")
+    @classmethod
+    def empty_expected_calving_date_to_none(cls, value):
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
+
+    @field_validator("days_pregnant", mode="before")
+    @classmethod
+    def empty_days_pregnant_to_none(cls, value):
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
 
     @model_validator(mode="after")
     def validate_exclusive(self) -> "PurchaseItem":
@@ -60,6 +74,13 @@ class ScenarioParams(BaseModel):
     culling: CullingParams = Field(default_factory=CullingParams)
     replacement: ReplacementParams = Field(default_factory=ReplacementParams)
     purchases: List[PurchaseItem] = Field(default_factory=list)
+
+    @field_validator("future_date", mode="before")
+    @classmethod
+    def empty_future_date_to_none(cls, value):
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
 
 
 class DatasetUploadResponse(BaseModel):
