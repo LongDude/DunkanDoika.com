@@ -6,6 +6,11 @@ export type DatasetUploadResponse = {
   quality_issues?: DatasetQualityIssue[]
 }
 
+export type DatasetInfo = DatasetUploadResponse & {
+  original_filename: string
+  created_at: string
+}
+
 export type DatasetQualityIssueSeverity = 'info' | 'warning' | 'error'
 export type DatasetQualityIssue = {
   code: string
@@ -67,6 +72,21 @@ export type ForecastJobInfo = {
   expires_at?: string | null
 }
 
+export type HistoryJobItem = ForecastJobInfo & {
+  has_result: boolean
+}
+
+export type HistoryJobDetail = HistoryJobItem & {
+  params: ScenarioParams
+}
+
+export type HistoryJobsPageResponse = {
+  items: HistoryJobItem[]
+  total: number
+  page: number
+  limit: number
+}
+
 export type ForecastJobWsEventType = 'job_progress' | 'job_succeeded' | 'job_failed' | 'heartbeat'
 
 export type ForecastJobWsEvent = {
@@ -83,6 +103,16 @@ export type ForecastJobWsEvent = {
 
 export type CreateForecastJobResponse = {
   job: ForecastJobInfo
+}
+
+export type BulkDeleteSkipItem = {
+  id: string
+  reason: string
+}
+
+export type BulkDeleteResponse = {
+  deleted_ids: string[]
+  skipped: BulkDeleteSkipItem[]
 }
 
 export type PurchaseItem = {
@@ -147,6 +177,19 @@ export type ScenarioDetail = {
   name: string
   created_at: string
   params: ScenarioParams
+}
+
+export type UserPresetParams = Omit<ScenarioParams, 'dataset_id'> & {
+  report_date?: string | null
+}
+
+export type UserPreset = {
+  preset_id: string
+  owner_user_id: string
+  name: string
+  params: UserPresetParams
+  created_at: string
+  updated_at: string
 }
 
 export type CullGrouping = 'lactation' | 'lactation_status' | 'age_band'

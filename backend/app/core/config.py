@@ -29,6 +29,11 @@ class Settings(BaseSettings):
     ws_heartbeat_seconds: int = Field(default=15)
     dim_mode: Literal["from_calving", "from_dataset_field"] = Field(default="from_calving")
     simulation_version: str = Field(default="1.1.0")
+    sso_jwt_secret: str = Field(default="")
+    sso_jwt_algorithms: str = Field(default="HS256")
+    sso_user_id_claim: str = Field(default="user_id")
+    sso_issuer: str = Field(default="")
+    sso_audience: str = Field(default="")
 
     @property
     def allowed_cors_origins_list(self) -> list[str]:

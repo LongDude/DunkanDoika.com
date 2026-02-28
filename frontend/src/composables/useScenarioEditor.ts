@@ -1,12 +1,24 @@
 import { computed, ref, watch, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { listScenarios, loadScenario, saveScenario } from '../services/api'
+import {
+  bulkDeleteMyPresets,
+  createMyPreset,
+  deleteMyPreset,
+  listMyPresets,
+  listScenarios,
+  loadScenario,
+  saveScenario,
+  updateMyPreset,
+} from '../services/api'
 import type {
+  BulkDeleteResponse,
   CullGrouping,
   ScenarioInfo,
   ScenarioParams,
   ScenarioPreset,
   UiValidationIssue,
+  UserPreset,
+  UserPresetParams,
 } from '../types/forecast'
 
 type ScenarioEditorOptions = {
@@ -69,6 +81,9 @@ export function useScenarioEditor(options: ScenarioEditorOptions) {
   const saving = ref(false)
   const loading = ref(false)
   const scenariosLoading = ref(false)
+  const presetsLoading = ref(false)
+  const presetsSaving = ref(false)
+  const userPresets = ref<UserPreset[]>([])
   const activePreset = ref<ScenarioPreset>('baseline')
 
   const baselineSnapshot = ref<string>('')
@@ -236,6 +251,44 @@ export function useScenarioEditor(options: ScenarioEditorOptions) {
     }
   }
 
+  function buildUserPresetParams(): UserPresetParams {
+    return {
+      report_date: form.value.report_date || null,
+      horizon_months: form.value.horizon_months,
+      future_date: form.value.future_date || null,
+      dim_mode: form.value.dim_mode || 'from_calving',
+      mc_runs: form.value.mc_runs,
+      seed: form.value.seed,
+      service_period: { ...form.value.service_period },
+      heifer_insem: { ...form.value.heifer_insem },
+      culling: { ...form.value.culling },
+      replacement: { ...form.value.replacement },
+      purchases: form.value.purchases.map(x => ({
+        date_in: x.date_in,
+        count: x.count,
+        expected_calving_date: normalizeOptionalDate(x.expected_calving_date),
+        days_pregnant: normalizeOptionalDays(x.days_pregnant),
+      })),
+    }
+  }
+
+  function applyUserPreset(preset: UserPreset) {
+    const params = preset.params
+    form.value = {
+      report_date: params.report_date || form.value.report_date || options.defaultReportDate.value,
+      horizon_months: params.horizon_months,
+      future_date: params.future_date || null,
+      dim_mode: params.dim_mode || 'from_calving',
+      mc_runs: params.mc_runs,
+      seed: params.seed,
+      service_period: { ...params.service_period },
+      heifer_insem: { ...params.heifer_insem },
+      culling: { ...params.culling },
+      replacement: { ...params.replacement },
+      purchases: (params.purchases || []).map(x => ({ ...x })),
+    }
+  }
+
   async function refreshScenarioList() {
     if (!options.datasetId.value) {
       scenarioList.value = []
@@ -247,6 +300,74 @@ export function useScenarioEditor(options: ScenarioEditorOptions) {
       scenarioList.value = all.filter(x => x.dataset_id === options.datasetId.value)
     } finally {
       scenariosLoading.value = false
+    }
+  }
+
+  async function refreshUserPresets() {
+    presetsLoading.value = true
+    try {
+      userPresets.value = await listMyPresets()
+    } finally {
+      presetsLoading.value = false
+    }
+  }
+
+  async function saveCurrentAsUserPreset(name: string) {
+    const trimmed = name.trim()
+    if (!trimmed) return null
+    presetsSaving.value = true
+    try {
+      const created = await createMyPreset(trimmed, buildUserPresetParams())
+      await refreshUserPresets()
+      return created
+    } finally {
+      presetsSaving.value = false
+    }
+  }
+
+  async function updateUserPresetById(presetId: string, payload: { name?: string; replaceParams?: boolean }) {
+    const body: { name?: string; params?: UserPresetParams } = {}
+    if (typeof payload.name === 'string') {
+      const trimmed = payload.name.trim()
+      if (trimmed) body.name = trimmed
+    }
+    if (payload.replaceParams) {
+      body.params = buildUserPresetParams()
+    }
+    if (!body.name && !body.params) return null
+    presetsSaving.value = true
+    try {
+      const updated = await updateMyPreset(presetId, body)
+      await refreshUserPresets()
+      return updated
+    } finally {
+      presetsSaving.value = false
+    }
+  }
+
+  async function deleteUserPresetById(presetId: string): Promise<BulkDeleteResponse> {
+    presetsSaving.value = true
+    try {
+      const response = await deleteMyPreset(presetId)
+      await refreshUserPresets()
+      return response
+    } finally {
+      presetsSaving.value = false
+    }
+  }
+
+  async function bulkDeleteUserPresetByIds(ids: string[]): Promise<BulkDeleteResponse> {
+    const cleaned = ids.filter(Boolean)
+    if (cleaned.length === 0) {
+      return { deleted_ids: [], skipped: [] }
+    }
+    presetsSaving.value = true
+    try {
+      const response = await bulkDeleteMyPresets(cleaned)
+      await refreshUserPresets()
+      return response
+    } finally {
+      presetsSaving.value = false
     }
   }
 
@@ -299,6 +420,9 @@ export function useScenarioEditor(options: ScenarioEditorOptions) {
     loading,
     scenariosLoading,
     scenarioList,
+    presetsLoading,
+    presetsSaving,
+    userPresets,
     activePreset,
     validationIssues,
     hasErrors,
@@ -310,7 +434,14 @@ export function useScenarioEditor(options: ScenarioEditorOptions) {
     buildParams,
     setFromScenarioParams,
     refreshScenarioList,
+    refreshUserPresets,
     saveCurrentScenario,
+    saveCurrentAsUserPreset,
+    updateUserPresetById,
+    deleteUserPresetById,
+    bulkDeleteUserPresetByIds,
+    buildUserPresetParams,
+    applyUserPreset,
     loadScenarioById,
     resetForNewDataset,
     restoreBaseline,

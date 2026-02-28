@@ -56,6 +56,7 @@ class ForecastJobModel(Base):
     __tablename__ = "forecast_jobs"
 
     job_id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    owner_user_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     dataset_id: Mapped[str] = mapped_column(ForeignKey("datasets.dataset_id", ondelete="CASCADE"), nullable=False)
     scenario_id: Mapped[str | None] = mapped_column(ForeignKey("scenarios.scenario_id", ondelete="SET NULL"), nullable=True)
     params_json: Mapped[dict] = mapped_column(JSONB, nullable=False)
@@ -71,8 +72,27 @@ class ForecastJobModel(Base):
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     dataset: Mapped[DatasetModel] = relationship(back_populates="forecast_jobs")
     scenario: Mapped[ScenarioModel | None] = relationship(back_populates="forecast_jobs")
 
-    __table_args__ = (Index("ix_forecast_jobs_status_queued", "status", "queued_at"),)
+    __table_args__ = (
+        Index("ix_forecast_jobs_status_queued", "status", "queued_at"),
+        Index("ix_forecast_jobs_owner_queued", "owner_user_id", "queued_at"),
+        Index("ix_forecast_jobs_owner_deleted", "owner_user_id", "deleted_at"),
+    )
+
+
+class UserPresetModel(Base):
+    __tablename__ = "user_presets"
+
+    preset_id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    owner_user_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    params_json: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=now_utc)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=now_utc, onupdate=now_utc)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (Index("ix_user_presets_owner_updated", "owner_user_id", "updated_at"),)

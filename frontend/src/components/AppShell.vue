@@ -35,7 +35,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import LanguageSwitcher from './LanguageSwitcher.vue'
 
-type ScreenId = 'dataset' | 'scenarios' | 'forecast' | 'comparison' | 'export'
+type ScreenId = 'dataset' | 'scenarios' | 'forecast' | 'comparison' | 'history' | 'export'
 
 defineProps<{
   activeScreen: ScreenId
@@ -54,6 +54,7 @@ const screens = computed<Array<{ id: ScreenId; label: string }>>(() => [
   { id: 'scenarios', label: t('nav.scenarios') },
   { id: 'forecast', label: t('nav.forecast') },
   { id: 'comparison', label: t('nav.comparison') },
+  { id: 'history', label: t('nav.history') },
   { id: 'export', label: t('nav.export') },
 ])
 </script>

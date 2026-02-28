@@ -1,6 +1,9 @@
-# Dairy Forecast (Hackathon 2026)
+# 未経産牛の乳生産能力の予測
+Hackaton 2026 - 未経産牛の乳生産能力の予測
 
 Backend-first application for dairy herd forecasting with async jobs, live progress, and scenario-based Monte Carlo simulation.
+
+### [DunkanDoika (link)](http://dunkandoika.liveisfpv.ru:8080/)
 
 ## Stack
 
@@ -45,6 +48,11 @@ Core variables:
 - `WS_HEARTBEAT_SECONDS`
 - `DIM_MODE` (`from_calving` | `from_dataset_field`)
 - `SIMULATION_VERSION`
+- `SSO_JWT_SECRET`
+- `SSO_JWT_ALGORITHMS` (e.g. `HS256`)
+- `SSO_USER_ID_CLAIM` (e.g. `user_id` or `UserID`)
+- `SSO_ISSUER`
+- `SSO_AUDIENCE`
 
 ## API Overview
 
@@ -83,6 +91,28 @@ Core variables:
 - `GET /api/forecast/jobs/{job_id}/export/csv`
 - `GET /api/forecast/jobs/{job_id}/export/xlsx`
 - `WS /api/ws/forecast/jobs/{job_id}`
+
+Owner stamping:
+
+- `POST /api/forecast/jobs` and `POST /api/scenarios/{scenario_id}/run` accept optional Bearer token.
+- If token is valid, backend stores `owner_user_id` from configured claim (`SSO_USER_ID_CLAIM`, fallback: `user_id`, `UserID`, `sub`, `uid`).
+- Invalid `Authorization` token returns `401`.
+
+### Personal History (`/api/me/*`, auth required)
+
+- `GET /api/me/history/jobs`
+- `GET /api/me/history/jobs/{job_id}`
+- `GET /api/me/history/jobs/{job_id}/result`
+- `DELETE /api/me/history/jobs/{job_id}`
+- `POST /api/me/history/jobs/bulk-delete`
+
+### User Presets (`/api/me/*`, auth required)
+
+- `GET /api/me/presets`
+- `POST /api/me/presets`
+- `PUT /api/me/presets/{preset_id}`
+- `DELETE /api/me/presets/{preset_id}`
+- `POST /api/me/presets/bulk-delete`
 
 Job states:
 

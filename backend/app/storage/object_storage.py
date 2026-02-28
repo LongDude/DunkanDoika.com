@@ -65,6 +65,9 @@ class ObjectStorageClient:
     def healthcheck(self) -> None:
         self._client.bucket_exists(self.datasets_bucket)
 
+    def delete_object(self, bucket: str, object_key: str) -> None:
+        self._client.remove_object(bucket, object_key)
+
     def iter_object(self, bucket: str, object_key: str) -> Iterable[bytes]:
         response = self._client.get_object(bucket, object_key)
         try:

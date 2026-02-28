@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
-from typing import Iterable, Optional
+from typing import Iterable, Optional, Sequence
 
-from sqlalchemy import and_, select
+from sqlalchemy import and_, desc, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.api.schemas import ForecastJobStatus, ScenarioParams
@@ -18,9 +18,16 @@ class ForecastJobRepository:
     def __init__(self, session: Session):
         self.session = session
 
-    def create(self, params: ScenarioParams, scenario_id: Optional[str] = None, expires_in_days: int = 30) -> ForecastJobModel:
+    def create(
+        self,
+        params: ScenarioParams,
+        scenario_id: Optional[str] = None,
+        expires_in_days: int = 30,
+        owner_user_id: str | None = None,
+    ) -> ForecastJobModel:
         queued_at = now_utc()
         job = ForecastJobModel(
+            owner_user_id=owner_user_id,
             dataset_id=params.dataset_id,
             scenario_id=scenario_id,
             params_json=params.model_dump(mode="json"),
@@ -36,8 +43,64 @@ class ForecastJobRepository:
         self.session.refresh(job)
         return job
 
-    def get(self, job_id: str) -> ForecastJobModel | None:
-        return self.session.get(ForecastJobModel, job_id)
+    def get(self, job_id: str, include_deleted: bool = False) -> ForecastJobModel | None:
+        stmt = select(ForecastJobModel).where(ForecastJobModel.job_id == job_id)
+        if not include_deleted:
+            stmt = stmt.where(ForecastJobModel.deleted_at.is_(None))
+        return self.session.scalar(stmt)
+
+    def get_for_owner(self, job_id: str, owner_user_id: str) -> ForecastJobModel | None:
+        stmt = (
+            select(ForecastJobModel)
+            .where(ForecastJobModel.job_id == job_id)
+            .where(ForecastJobModel.owner_user_id == owner_user_id)
+            .where(ForecastJobModel.deleted_at.is_(None))
+        )
+        return self.session.scalar(stmt)
+
+    def list_for_owner(
+        self,
+        owner_user_id: str,
+        *,
+        status: str | None = None,
+        q: str | None = None,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+        page: int = 1,
+        limit: int = 20,
+    ) -> tuple[list[ForecastJobModel], int]:
+        base = (
+            select(ForecastJobModel)
+            .where(ForecastJobModel.owner_user_id == owner_user_id)
+            .where(ForecastJobModel.deleted_at.is_(None))
+        )
+        if status:
+            base = base.where(ForecastJobModel.status == status)
+        if q:
+            term = f"%{q}%"
+            base = base.where(
+                or_(
+                    ForecastJobModel.job_id.ilike(term),
+                    ForecastJobModel.dataset_id.ilike(term),
+                    ForecastJobModel.scenario_id.ilike(term),
+                )
+            )
+        if date_from is not None:
+            base = base.where(ForecastJobModel.queued_at >= date_from)
+        if date_to is not None:
+            base = base.where(ForecastJobModel.queued_at <= date_to)
+
+        total_stmt = select(func.count()).select_from(base.subquery())
+        total = int(self.session.scalar(total_stmt) or 0)
+
+        safe_page = max(1, page)
+        safe_limit = max(1, min(100, limit))
+        stmt = (
+            base.order_by(desc(ForecastJobModel.queued_at))
+            .offset((safe_page - 1) * safe_limit)
+            .limit(safe_limit)
+        )
+        return list(self.session.scalars(stmt).all()), total
 
     def mark_running(self, job_id: str, progress_pct: int = 10, total_runs: int | None = None) -> ForecastJobModel | None:
         job = self.get(job_id)
@@ -120,6 +183,7 @@ class ForecastJobRepository:
                 ForecastJobModel.status == ForecastJobStatus.RUNNING.value,
                 ForecastJobModel.started_at.is_not(None),
                 ForecastJobModel.started_at < threshold,
+                ForecastJobModel.deleted_at.is_(None),
             )
         )
         return self.session.scalars(stmt).all()
@@ -138,3 +202,23 @@ class ForecastJobRepository:
         self.session.commit()
         self.session.refresh(job)
         return job
+
+    def soft_delete_for_owner(self, job_id: str, owner_user_id: str) -> ForecastJobModel | None:
+        job = self.get_for_owner(job_id, owner_user_id)
+        if job is None:
+            return None
+        job.deleted_at = now_utc()
+        self.session.commit()
+        self.session.refresh(job)
+        return job
+
+    def bulk_soft_delete_for_owner(self, ids: Sequence[str], owner_user_id: str) -> tuple[list[str], list[str]]:
+        deleted_ids: list[str] = []
+        missing_ids: list[str] = []
+        for job_id in ids:
+            deleted = self.soft_delete_for_owner(job_id, owner_user_id)
+            if deleted is None:
+                missing_ids.append(job_id)
+            else:
+                deleted_ids.append(job_id)
+        return deleted_ids, missing_ids

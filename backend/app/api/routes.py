@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import date, datetime, time, timezone
 
-from fastapi import APIRouter, Depends, File, Request, UploadFile, WebSocket, WebSocketDisconnect, status
+from fastapi import APIRouter, Depends, File, Query, Request, UploadFile, WebSocket, WebSocketDisconnect, status
 from fastapi.responses import StreamingResponse
 from redis import Redis
 from pydantic import ValidationError
@@ -11,10 +11,16 @@ from sqlalchemy.orm import Session
 
 from app.api.errors import api_error
 from app.api.schemas import (
+    BulkDeleteRequest,
+    BulkDeleteResponse,
+    BulkDeleteSkipItem,
     CreateForecastJobResponse,
     DatasetInfo,
     DatasetQualityIssue,
     DatasetUploadResponse,
+    HistoryJobDetail,
+    HistoryJobListItem,
+    HistoryJobsPageResponse,
     ForecastJobInfo,
     ForecastJobStatus,
     ForecastResult,
@@ -22,6 +28,9 @@ from app.api.schemas import (
     ScenarioDetail,
     ScenarioInfo,
     ScenarioParams,
+    UserPresetCreateRequest,
+    UserPresetResponse,
+    UserPresetUpdateRequest,
 )
 from app.core.config import settings
 from app.db.session import SessionLocal, get_db_session
@@ -31,6 +40,8 @@ from app.queueing import enqueue_forecast_job
 from app.repositories.datasets import DatasetRepository
 from app.repositories.forecast_jobs import ForecastJobRepository
 from app.repositories.scenarios import ScenarioRepository
+from app.repositories.user_presets import UserPresetRepository
+from app.security.jwt_auth import AuthUser, get_current_user, get_optional_user
 from app.simulator.loader import DatasetValidationError
 from app.storage.object_storage import storage_client
 
@@ -51,6 +62,24 @@ def _to_job_info(item) -> ForecastJobInfo:
         started_at=item.started_at,
         finished_at=item.finished_at,
         expires_at=item.expires_at,
+    )
+
+
+def _to_history_item(item) -> HistoryJobListItem:
+    return HistoryJobListItem(
+        **_to_job_info(item).model_dump(),
+        has_result=bool(item.result_object_key),
+    )
+
+
+def _to_preset_response(item) -> UserPresetResponse:
+    return UserPresetResponse(
+        preset_id=item.preset_id,
+        owner_user_id=item.owner_user_id,
+        name=item.name,
+        params=item.params_json,
+        created_at=item.created_at,
+        updated_at=item.updated_at,
     )
 
 
@@ -109,6 +138,40 @@ def _allowed_csv_mime(content_type: str | None) -> bool:
         "text/plain",
         "application/vnd.ms-excel",
     }
+
+
+def _date_from_start_utc(value: date | None) -> datetime | None:
+    if value is None:
+        return None
+    return datetime.combine(value, time.min).replace(tzinfo=timezone.utc)
+
+
+def _date_to_end_utc(value: date | None) -> datetime | None:
+    if value is None:
+        return None
+    return datetime.combine(value, time.max).replace(tzinfo=timezone.utc)
+
+
+def _delete_job_artifacts_best_effort(job) -> list[BulkDeleteSkipItem]:
+    skipped: list[BulkDeleteSkipItem] = []
+    object_targets = [
+        (storage_client.results_bucket, job.result_object_key, "result"),
+        (storage_client.exports_bucket, job.csv_object_key, "csv"),
+        (storage_client.exports_bucket, job.xlsx_object_key, "xlsx"),
+    ]
+    for bucket, object_key, alias in object_targets:
+        if not object_key:
+            continue
+        try:
+            storage_client.delete_object(bucket, object_key)
+        except Exception as exc:
+            skipped.append(
+                BulkDeleteSkipItem(
+                    id=job.job_id,
+                    reason=f"OBJECT_DELETE_FAILED:{alias}:{exc}",
+                )
+            )
+    return skipped
 
 
 @router.get("/health/live")
@@ -263,10 +326,14 @@ def scenario_get(scenario_id: str, session: Session = Depends(get_db_session)) -
 def create_forecast_job(
     params: ScenarioParams,
     session: Session = Depends(get_db_session),
+    user: AuthUser | None = Depends(get_optional_user),
 ) -> CreateForecastJobResponse:
     if DatasetRepository(session).get(params.dataset_id) is None:
         raise api_error(404, "DATASET_NOT_FOUND", "Dataset not found")
-    job = ForecastJobRepository(session).create(params=params)
+    create_kwargs: dict[str, str] = {}
+    if user is not None:
+        create_kwargs["owner_user_id"] = user.user_id
+    job = ForecastJobRepository(session).create(params=params, **create_kwargs)
     enqueue_forecast_job(job.job_id)
     return CreateForecastJobResponse(job=_to_job_info(job))
 
@@ -377,12 +444,203 @@ def get_forecast_export_xlsx(job_id: str, session: Session = Depends(get_db_sess
     )
 
 
+@router.get("/me/history/jobs", response_model=HistoryJobsPageResponse)
+def list_my_history_jobs(
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=20, ge=1, le=100),
+    status_filter: ForecastJobStatus | None = Query(default=None, alias="status"),
+    q: str | None = Query(default=None),
+    date_from: date | None = Query(default=None),
+    date_to: date | None = Query(default=None),
+    user: AuthUser = Depends(get_current_user),
+    session: Session = Depends(get_db_session),
+) -> HistoryJobsPageResponse:
+    if date_from and date_to and date_from > date_to:
+        raise api_error(422, "REQUEST_VALIDATION_ERROR", "date_from must be less than or equal to date_to")
+    jobs, total = ForecastJobRepository(session).list_for_owner(
+        user.user_id,
+        status=status_filter.value if status_filter else None,
+        q=q,
+        date_from=_date_from_start_utc(date_from),
+        date_to=_date_to_end_utc(date_to),
+        page=page,
+        limit=limit,
+    )
+    return HistoryJobsPageResponse(
+        items=[_to_history_item(item) for item in jobs],
+        total=total,
+        page=page,
+        limit=limit,
+    )
+
+
+@router.get("/me/history/jobs/{job_id}", response_model=HistoryJobDetail)
+def get_my_history_job(
+    job_id: str,
+    user: AuthUser = Depends(get_current_user),
+    session: Session = Depends(get_db_session),
+) -> HistoryJobDetail:
+    row = ForecastJobRepository(session).get_for_owner(job_id, user.user_id)
+    if row is None:
+        raise api_error(404, "HISTORY_ITEM_NOT_FOUND", "History job not found")
+    try:
+        params = ScenarioParams.model_validate(row.params_json)
+    except ValidationError as exc:
+        raise api_error(422, "HISTORY_PARAMS_INVALID", "History job params are inconsistent", {"reason": str(exc)})
+
+    return HistoryJobDetail(
+        **_to_history_item(row).model_dump(),
+        params=params,
+    )
+
+
+@router.get("/me/history/jobs/{job_id}/result", response_model=ForecastResult)
+def get_my_history_job_result(
+    job_id: str,
+    user: AuthUser = Depends(get_current_user),
+    session: Session = Depends(get_db_session),
+) -> ForecastResult:
+    row = ForecastJobRepository(session).get_for_owner(job_id, user.user_id)
+    if row is None:
+        raise api_error(404, "HISTORY_ITEM_NOT_FOUND", "History job not found")
+    if row.status != ForecastJobStatus.SUCCEEDED.value or not row.result_object_key:
+        raise api_error(409, "JOB_NOT_READY", "History result is not available")
+
+    try:
+        payload = storage_client.get_bytes(storage_client.results_bucket, row.result_object_key)
+        return ForecastResult.model_validate_json(payload)
+    except Exception as exc:
+        raise api_error(
+            409,
+            "HISTORY_RESULT_EXPIRED",
+            "History result object is not available",
+            {"reason": str(exc)},
+        )
+
+
+@router.delete("/me/history/jobs/{job_id}", response_model=BulkDeleteResponse)
+def delete_my_history_job(
+    job_id: str,
+    user: AuthUser = Depends(get_current_user),
+    session: Session = Depends(get_db_session),
+) -> BulkDeleteResponse:
+    jobs = ForecastJobRepository(session)
+    row = jobs.get_for_owner(job_id, user.user_id)
+    if row is None:
+        raise api_error(404, "HISTORY_ITEM_NOT_FOUND", "History job not found")
+    if row.status in {ForecastJobStatus.QUEUED.value, ForecastJobStatus.RUNNING.value}:
+        raise api_error(409, "HISTORY_JOB_ACTIVE", "Cannot delete queued or running job")
+
+    skipped = _delete_job_artifacts_best_effort(row)
+    jobs.soft_delete_for_owner(job_id, user.user_id)
+    return BulkDeleteResponse(
+        deleted_ids=[job_id],
+        skipped=skipped,
+    )
+
+
+@router.post("/me/history/jobs/bulk-delete", response_model=BulkDeleteResponse)
+def bulk_delete_my_history_jobs(
+    req: BulkDeleteRequest,
+    user: AuthUser = Depends(get_current_user),
+    session: Session = Depends(get_db_session),
+) -> BulkDeleteResponse:
+    jobs = ForecastJobRepository(session)
+    deleted_ids: list[str] = []
+    skipped: list[BulkDeleteSkipItem] = []
+
+    for job_id in req.ids:
+        row = jobs.get_for_owner(job_id, user.user_id)
+        if row is None:
+            skipped.append(BulkDeleteSkipItem(id=job_id, reason="NOT_FOUND"))
+            continue
+        if row.status in {ForecastJobStatus.QUEUED.value, ForecastJobStatus.RUNNING.value}:
+            skipped.append(BulkDeleteSkipItem(id=job_id, reason="JOB_ACTIVE"))
+            continue
+        skipped.extend(_delete_job_artifacts_best_effort(row))
+        jobs.soft_delete_for_owner(job_id, user.user_id)
+        deleted_ids.append(job_id)
+
+    return BulkDeleteResponse(deleted_ids=deleted_ids, skipped=skipped)
+
+
+@router.get("/me/presets", response_model=list[UserPresetResponse])
+def list_my_presets(
+    user: AuthUser = Depends(get_current_user),
+    session: Session = Depends(get_db_session),
+) -> list[UserPresetResponse]:
+    rows = UserPresetRepository(session).list_for_owner(user.user_id)
+    return [_to_preset_response(row) for row in rows]
+
+
+@router.post("/me/presets", response_model=UserPresetResponse, status_code=status.HTTP_201_CREATED)
+def create_my_preset(
+    req: UserPresetCreateRequest,
+    user: AuthUser = Depends(get_current_user),
+    session: Session = Depends(get_db_session),
+) -> UserPresetResponse:
+    row = UserPresetRepository(session).create(
+        owner_user_id=user.user_id,
+        name=req.name,
+        params_json=req.params.model_dump(mode="json"),
+    )
+    return _to_preset_response(row)
+
+
+@router.put("/me/presets/{preset_id}", response_model=UserPresetResponse)
+def update_my_preset(
+    preset_id: str,
+    req: UserPresetUpdateRequest,
+    user: AuthUser = Depends(get_current_user),
+    session: Session = Depends(get_db_session),
+) -> UserPresetResponse:
+    row = UserPresetRepository(session).update(
+        preset_id=preset_id,
+        owner_user_id=user.user_id,
+        name=req.name,
+        params_json=req.params.model_dump(mode="json") if req.params is not None else None,
+    )
+    if row is None:
+        raise api_error(404, "PRESET_NOT_FOUND", "Preset not found")
+    return _to_preset_response(row)
+
+
+@router.delete("/me/presets/{preset_id}", response_model=BulkDeleteResponse)
+def delete_my_preset(
+    preset_id: str,
+    user: AuthUser = Depends(get_current_user),
+    session: Session = Depends(get_db_session),
+) -> BulkDeleteResponse:
+    row = UserPresetRepository(session).soft_delete(preset_id, user.user_id)
+    if row is None:
+        raise api_error(404, "PRESET_NOT_FOUND", "Preset not found")
+    return BulkDeleteResponse(deleted_ids=[preset_id], skipped=[])
+
+
+@router.post("/me/presets/bulk-delete", response_model=BulkDeleteResponse)
+def bulk_delete_my_presets(
+    req: BulkDeleteRequest,
+    user: AuthUser = Depends(get_current_user),
+    session: Session = Depends(get_db_session),
+) -> BulkDeleteResponse:
+    repo = UserPresetRepository(session)
+    deleted, missing = repo.bulk_soft_delete(req.ids, user.user_id)
+    return BulkDeleteResponse(
+        deleted_ids=deleted,
+        skipped=[BulkDeleteSkipItem(id=item, reason="NOT_FOUND") for item in missing],
+    )
+
+
 @router.post(
     "/scenarios/{scenario_id}/run",
     response_model=CreateForecastJobResponse,
     status_code=status.HTTP_202_ACCEPTED,
 )
-def scenario_run(scenario_id: str, session: Session = Depends(get_db_session)) -> CreateForecastJobResponse:
+def scenario_run(
+    scenario_id: str,
+    session: Session = Depends(get_db_session),
+    user: AuthUser | None = Depends(get_optional_user),
+) -> CreateForecastJobResponse:
     scenario = ScenarioRepository(session).get(scenario_id)
     if scenario is None:
         raise api_error(404, "SCENARIO_NOT_FOUND", "Scenario not found")
@@ -392,7 +650,10 @@ def scenario_run(scenario_id: str, session: Session = Depends(get_db_session)) -
         raise api_error(422, "SCENARIO_PARAMS_INVALID", "Scenario params are inconsistent", {"reason": str(exc)})
     if DatasetRepository(session).get(params.dataset_id) is None:
         raise api_error(404, "DATASET_NOT_FOUND", "Dataset not found")
-    job = ForecastJobRepository(session).create(params=params, scenario_id=scenario.scenario_id)
+    create_kwargs: dict[str, str] = {}
+    if user is not None:
+        create_kwargs["owner_user_id"] = user.user_id
+    job = ForecastJobRepository(session).create(params=params, scenario_id=scenario.scenario_id, **create_kwargs)
     enqueue_forecast_job(job.job_id)
     return CreateForecastJobResponse(job=_to_job_info(job))
 

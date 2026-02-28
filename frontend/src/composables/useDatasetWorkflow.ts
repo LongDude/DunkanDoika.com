@@ -1,7 +1,7 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { uploadDataset } from '../services/api'
-import type { DatasetQualityIssue, DatasetUploadResponse } from '../types/forecast'
+import { getDatasetInfo, uploadDataset } from '../services/api'
+import type { DatasetInfo, DatasetQualityIssue, DatasetUploadResponse } from '../types/forecast'
 
 export function useDatasetWorkflow() {
   const { t } = useI18n()
@@ -58,6 +58,17 @@ export function useDatasetWorkflow() {
     }
   }
 
+  async function loadById(datasetId: string) {
+    uploadError.value = null
+    const info = await getDatasetInfo(datasetId)
+    dataset.value = info
+    return info
+  }
+
+  function setDataset(value: DatasetUploadResponse | DatasetInfo | null) {
+    dataset.value = value
+  }
+
   function clear() {
     dataset.value = null
     uploadError.value = null
@@ -69,6 +80,8 @@ export function useDatasetWorkflow() {
     uploadError,
     qualityIssues,
     upload,
+    loadById,
+    setDataset,
     clear,
   }
 }

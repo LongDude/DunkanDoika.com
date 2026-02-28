@@ -8,17 +8,24 @@ import type {
   SsoUser,
 } from '../types/auth'
 import type {
+  BulkDeleteResponse,
   CreateForecastJobResponse,
+  DatasetInfo,
   DatasetUploadResponse,
   ForecastJobInfo,
   ForecastResult,
+  HistoryJobDetail,
+  HistoryJobsPageResponse,
   ScenarioDetail,
   ScenarioInfo,
   ScenarioParams,
+  UserPreset,
+  UserPresetParams,
 } from '../types/forecast'
 
 const FORECAST_API = import.meta.env.VITE_API_BASE_URL ?? '/api'
 const SSO_API = import.meta.env.VITE_SSO_API_BASE_URL ?? '/api'
+const ACCESS_TOKEN_STORAGE_KEY = 'sso_access_token'
 
 function resolveUrl(base: string, path = ''): URL {
   let cleanBase = base.trim().replace(/\/$/, '')
@@ -82,6 +89,25 @@ async function unwrapJson<T>(resp: Response): Promise<T> {
   return resp.json() as Promise<T>
 }
 
+function readStoredAccessToken(): string | null {
+  try {
+    return localStorage.getItem(ACCESS_TOKEN_STORAGE_KEY)
+  } catch {
+    return null
+  }
+}
+
+function authHeader(required = false): Record<string, string> {
+  const token = readStoredAccessToken()
+  if (!token) {
+    if (required) {
+      throw new Error('Authorization token is missing')
+    }
+    return {}
+  }
+  return { Authorization: `Bearer ${token}` }
+}
+
 export async function uploadDataset(file: File): Promise<DatasetUploadResponse> {
   const form = new FormData()
   form.append('file', file)
@@ -89,10 +115,15 @@ export async function uploadDataset(file: File): Promise<DatasetUploadResponse> 
   return unwrapJson<DatasetUploadResponse>(resp)
 }
 
+export async function getDatasetInfo(datasetId: string): Promise<DatasetInfo> {
+  const resp = await fetch(resolveForecastUrl(`/datasets/${datasetId}`))
+  return unwrapJson<DatasetInfo>(resp)
+}
+
 export async function createForecastJob(params: ScenarioParams): Promise<CreateForecastJobResponse> {
   const resp = await fetch(resolveForecastUrl('/forecast/jobs'), {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...authHeader(false) },
     body: JSON.stringify(params),
   })
   return unwrapJson<CreateForecastJobResponse>(resp)
@@ -140,8 +171,110 @@ export async function loadScenario(id: string): Promise<ScenarioDetail> {
 }
 
 export async function runScenario(id: string): Promise<CreateForecastJobResponse> {
-  const resp = await fetch(resolveForecastUrl(`/scenarios/${id}/run`), { method: 'POST' })
+  const resp = await fetch(resolveForecastUrl(`/scenarios/${id}/run`), {
+    method: 'POST',
+    headers: { ...authHeader(false) },
+  })
   return unwrapJson<CreateForecastJobResponse>(resp)
+}
+
+export async function listMyHistoryJobs(params?: {
+  page?: number
+  limit?: number
+  status?: string
+  q?: string
+  date_from?: string
+  date_to?: string
+}): Promise<HistoryJobsPageResponse> {
+  const url = resolveForecastUrl('/me/history/jobs')
+  if (params) {
+    if (params.page) url.searchParams.set('page', String(params.page))
+    if (params.limit) url.searchParams.set('limit', String(params.limit))
+    if (params.status) url.searchParams.set('status', params.status)
+    if (params.q) url.searchParams.set('q', params.q)
+    if (params.date_from) url.searchParams.set('date_from', params.date_from)
+    if (params.date_to) url.searchParams.set('date_to', params.date_to)
+  }
+  const resp = await fetch(url, {
+    headers: { ...authHeader(true) },
+  })
+  return unwrapJson<HistoryJobsPageResponse>(resp)
+}
+
+export async function getMyHistoryJob(jobId: string): Promise<HistoryJobDetail> {
+  const resp = await fetch(resolveForecastUrl(`/me/history/jobs/${jobId}`), {
+    headers: { ...authHeader(true) },
+  })
+  return unwrapJson<HistoryJobDetail>(resp)
+}
+
+export async function getMyHistoryJobResult(jobId: string): Promise<ForecastResult> {
+  const resp = await fetch(resolveForecastUrl(`/me/history/jobs/${jobId}/result`), {
+    headers: { ...authHeader(true) },
+  })
+  return unwrapJson<ForecastResult>(resp)
+}
+
+export async function deleteMyHistoryJob(jobId: string): Promise<BulkDeleteResponse> {
+  const resp = await fetch(resolveForecastUrl(`/me/history/jobs/${jobId}`), {
+    method: 'DELETE',
+    headers: { ...authHeader(true) },
+  })
+  return unwrapJson<BulkDeleteResponse>(resp)
+}
+
+export async function bulkDeleteMyHistoryJobs(ids: string[]): Promise<BulkDeleteResponse> {
+  const resp = await fetch(resolveForecastUrl('/me/history/jobs/bulk-delete'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeader(true) },
+    body: JSON.stringify({ ids }),
+  })
+  return unwrapJson<BulkDeleteResponse>(resp)
+}
+
+export async function listMyPresets(): Promise<UserPreset[]> {
+  const resp = await fetch(resolveForecastUrl('/me/presets'), {
+    headers: { ...authHeader(true) },
+  })
+  return unwrapJson<UserPreset[]>(resp)
+}
+
+export async function createMyPreset(name: string, params: UserPresetParams): Promise<UserPreset> {
+  const resp = await fetch(resolveForecastUrl('/me/presets'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeader(true) },
+    body: JSON.stringify({ name, params }),
+  })
+  return unwrapJson<UserPreset>(resp)
+}
+
+export async function updateMyPreset(
+  presetId: string,
+  payload: { name?: string; params?: UserPresetParams },
+): Promise<UserPreset> {
+  const resp = await fetch(resolveForecastUrl(`/me/presets/${presetId}`), {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...authHeader(true) },
+    body: JSON.stringify(payload),
+  })
+  return unwrapJson<UserPreset>(resp)
+}
+
+export async function deleteMyPreset(presetId: string): Promise<BulkDeleteResponse> {
+  const resp = await fetch(resolveForecastUrl(`/me/presets/${presetId}`), {
+    method: 'DELETE',
+    headers: { ...authHeader(true) },
+  })
+  return unwrapJson<BulkDeleteResponse>(resp)
+}
+
+export async function bulkDeleteMyPresets(ids: string[]): Promise<BulkDeleteResponse> {
+  const resp = await fetch(resolveForecastUrl('/me/presets/bulk-delete'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeader(true) },
+    body: JSON.stringify({ ids }),
+  })
+  return unwrapJson<BulkDeleteResponse>(resp)
 }
 
 export async function ssoRegister(request: SsoRegisterRequest): Promise<SsoUser> {

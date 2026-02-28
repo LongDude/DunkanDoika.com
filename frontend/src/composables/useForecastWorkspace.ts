@@ -3,6 +3,7 @@ import { useI18n } from 'vue-i18n'
 import { useComparison } from './useComparison'
 import { useDatasetWorkflow } from './useDatasetWorkflow'
 import { useForecastRun } from './useForecastRun'
+import { useHistory } from './useHistory'
 import { useScenarioEditor } from './useScenarioEditor'
 import type { DisabledReason, ScenarioPreset } from '../types/forecast'
 
@@ -20,6 +21,7 @@ export function useForecastWorkspace() {
   const editor = useScenarioEditor({ datasetId, defaultReportDate })
   const runLayer = useForecastRun()
   const comparison = useComparison()
+  const history = useHistory()
 
   const runDisabledReason = computed<DisabledReason>(() => {
     if (!datasetId.value) return disabled(true, t('disabledReasons.datasetRequired'))
@@ -59,6 +61,7 @@ export function useForecastWorkspace() {
       const info = await datasetFlow.upload(input.files[0])
       editor.resetForNewDataset(info.report_date_suggested ?? '')
       await editor.refreshScenarioList()
+      await editor.refreshUserPresets()
       comparison.clear()
       runLayer.reset()
     } catch (err) {
@@ -69,6 +72,15 @@ export function useForecastWorkspace() {
   async function refreshScenarioList() {
     try {
       await editor.refreshScenarioList()
+      await editor.refreshUserPresets()
+    } catch (err) {
+      alert(`${t('alerts.loadFailed')}: ${err instanceof Error ? err.message : ''}`)
+    }
+  }
+
+  async function refreshHistory() {
+    try {
+      await history.fetchPage()
     } catch (err) {
       alert(`${t('alerts.loadFailed')}: ${err instanceof Error ? err.message : ''}`)
     }
@@ -81,6 +93,12 @@ export function useForecastWorkspace() {
       await runLayer.runWithParams(params)
     } catch (err) {
       alert(`${t('alerts.forecastFailed')}: ${err instanceof Error ? err.message : ''}`)
+      return
+    }
+    try {
+      await history.fetchPage()
+    } catch {
+      // best-effort refresh; history panel can be refreshed manually
     }
   }
 
@@ -112,6 +130,98 @@ export function useForecastWorkspace() {
       await runLayer.runSavedScenarioById(id)
     } catch (err) {
       alert(`${t('alerts.runFailed')}: ${err instanceof Error ? err.message : ''}`)
+      return
+    }
+    try {
+      await history.fetchPage()
+    } catch {
+      // best-effort refresh; history panel can be refreshed manually
+    }
+  }
+
+  async function loadScenarioFromHistory(jobId: string) {
+    try {
+      const detail = await history.getDetail(jobId)
+      if (datasetId.value !== detail.dataset_id) {
+        const datasetInfo = await datasetFlow.loadById(detail.dataset_id)
+        editor.resetForNewDataset(datasetInfo.report_date_suggested ?? '')
+        await editor.refreshScenarioList()
+      }
+      editor.setFromScenarioParams(detail.params)
+      editor.scenarioName.value = `${t('scenario.scenarioName')} #${detail.job_id.slice(0, 8)}`
+      editor.markBaseline()
+    } catch (err) {
+      alert(`${t('alerts.loadFailed')}: ${err instanceof Error ? err.message : ''}`)
+    }
+  }
+
+  async function addHistoryJobToComparison(jobId: string) {
+    try {
+      const result = await history.getResult(jobId)
+      const label = `Job ${jobId.slice(0, 8)}`
+      const res = comparison.addScenario(label, result)
+      if (!res.ok && res.reason) {
+        alert(res.reason)
+      }
+    } catch (err) {
+      alert(`${t('alerts.runFailed')}: ${err instanceof Error ? err.message : ''}`)
+    }
+  }
+
+  async function addSelectedHistoryToComparison() {
+    const ids = history.selectedIds.value.slice()
+    if (ids.length === 0) return
+
+    const availableSlots = Math.max(0, comparison.maxItems - comparison.items.value.length)
+    if (availableSlots === 0) {
+      alert(t('disabledReasons.compareLimit'))
+      return
+    }
+
+    const toLoad = ids.slice(0, availableSlots)
+    const skippedCount = ids.length - toLoad.length
+    let failedCount = 0
+
+    for (const id of toLoad) {
+      try {
+        const result = await history.getResult(id)
+        comparison.addScenario(`Job ${id.slice(0, 8)}`, result)
+      } catch {
+        failedCount += 1
+      }
+    }
+
+    if (skippedCount > 0 || failedCount > 0) {
+      alert(
+        t('history.bulkCompareSummary', {
+          added: toLoad.length - failedCount,
+          skipped: skippedCount + failedCount,
+        }),
+      )
+    }
+  }
+
+  async function deleteHistoryJob(jobId: string) {
+    try {
+      await history.deleteOne(jobId)
+    } catch (err) {
+      alert(`${t('alerts.saveFailed')}: ${err instanceof Error ? err.message : ''}`)
+    }
+  }
+
+  async function deleteSelectedHistoryJobs() {
+    try {
+      const response = await history.deleteSelected()
+      if (response.skipped.length > 0) {
+        alert(
+          t('history.bulkDeleteSummary', {
+            deleted: response.deleted_ids.length,
+            skipped: response.skipped.length,
+          }),
+        )
+      }
+    } catch (err) {
+      alert(`${t('alerts.saveFailed')}: ${err instanceof Error ? err.message : ''}`)
     }
   }
 
@@ -151,6 +261,7 @@ export function useForecastWorkspace() {
     editor,
     runLayer,
     comparison,
+    history,
     runDisabledReason,
     saveDisabledReason,
     exportDisabledReason,
@@ -158,6 +269,7 @@ export function useForecastWorkspace() {
     undoDisabledReason,
     onFileInput,
     refreshScenarioList,
+    refreshHistory,
     runForecast,
     fastRun,
     saveScenario,
@@ -167,5 +279,10 @@ export function useForecastWorkspace() {
     exportXlsx,
     addCurrentToComparison,
     undoScenarioChanges,
+    loadScenarioFromHistory,
+    addHistoryJobToComparison,
+    addSelectedHistoryToComparison,
+    deleteHistoryJob,
+    deleteSelectedHistoryJobs,
   }
 }

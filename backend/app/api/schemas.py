@@ -199,3 +199,78 @@ class ApiError(BaseModel):
     error_code: str
     message: str
     details: Optional[dict] = None
+
+
+class HistoryJobListItem(ForecastJobInfo):
+    has_result: bool = False
+
+
+class HistoryJobDetail(HistoryJobListItem):
+    params: ScenarioParams
+
+
+class HistoryJobsPageResponse(BaseModel):
+    items: list[HistoryJobListItem]
+    total: int = Field(ge=0)
+    page: int = Field(ge=1)
+    limit: int = Field(ge=1, le=100)
+
+
+class BulkDeleteRequest(BaseModel):
+    ids: list[str] = Field(min_length=1, max_length=500)
+
+
+class BulkDeleteSkipItem(BaseModel):
+    id: str
+    reason: str
+
+
+class BulkDeleteResponse(BaseModel):
+    deleted_ids: list[str] = Field(default_factory=list)
+    skipped: list[BulkDeleteSkipItem] = Field(default_factory=list)
+
+
+class UserPresetParams(BaseModel):
+    report_date: Optional[date] = None
+    horizon_months: int = Field(default=36, ge=1, le=120)
+    future_date: Optional[date] = None
+    dim_mode: Optional[Literal["from_calving", "from_dataset_field"]] = None
+    seed: int = 42
+    mc_runs: int = Field(default=1, ge=1, le=50000)
+    service_period: ServicePeriodParams = Field(default_factory=ServicePeriodParams)
+    heifer_insem: HeiferInsemParams = Field(default_factory=HeiferInsemParams)
+    culling: CullingParams = Field(default_factory=CullingParams)
+    replacement: ReplacementParams = Field(default_factory=ReplacementParams)
+    purchases: List[PurchaseItem] = Field(default_factory=list)
+
+    @field_validator("future_date", mode="before")
+    @classmethod
+    def empty_future_date_to_none(cls, value):
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
+
+
+class UserPresetCreateRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    params: UserPresetParams
+
+
+class UserPresetUpdateRequest(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=1, max_length=120)
+    params: Optional[UserPresetParams] = None
+
+    @model_validator(mode="after")
+    def validate_any_payload(self) -> "UserPresetUpdateRequest":
+        if self.name is None and self.params is None:
+            raise ValueError("Provide at least one field to update")
+        return self
+
+
+class UserPresetResponse(BaseModel):
+    preset_id: str
+    owner_user_id: str
+    name: str
+    params: UserPresetParams
+    created_at: datetime
+    updated_at: datetime

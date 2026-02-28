@@ -21,6 +21,7 @@
         @load-scenario="workspace.loadScenarioById"
         @run-scenario="handleRunSavedScenario"
       />
+      <UserPresetManager :editor="workspace.editor" />
       <ScenarioFormAdvanced :editor="workspace.editor" />
     </section>
 
@@ -97,6 +98,20 @@
       />
     </section>
 
+    <section v-if="activeScreen === 'history'" class="screen-stack">
+      <HistoryJobsPanel
+        :history="workspace.history"
+        @refresh="handleHistoryRefresh"
+        @load-job="handleLoadFromHistory"
+        @compare-job="workspace.addHistoryJobToComparison"
+        @delete-job="workspace.deleteHistoryJob"
+        @compare-selected="workspace.addSelectedHistoryToComparison"
+        @delete-selected="workspace.deleteSelectedHistoryJobs"
+        @prev-page="handleHistoryPrevPage"
+        @next-page="handleHistoryNextPage"
+      />
+    </section>
+
     <section v-if="activeScreen === 'export'" class="screen-stack">
       <section class="card">
         <h2>{{ t('export.title') }}</h2>
@@ -142,23 +157,25 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import AppShell from './AppShell.vue'
 import DatasetQualityPanel from './DatasetQualityPanel.vue'
 import ScenarioFormBasic from './ScenarioFormBasic.vue'
 import ScenarioFormAdvanced from './ScenarioFormAdvanced.vue'
+import UserPresetManager from './UserPresetManager.vue'
 import ForecastKpiCards from './ForecastKpiCards.vue'
 import ForecastChartsPanel from './ForecastChartsPanel.vue'
 import ComparisonTable from './ComparisonTable.vue'
 import ComparisonCharts from './ComparisonCharts.vue'
+import HistoryJobsPanel from './HistoryJobsPanel.vue'
 import ActionFooterBar from './ActionFooterBar.vue'
 import { useForecastWorkspace } from '../composables/useForecastWorkspace'
 import { formatDate, formatNumber } from '../utils/format'
 import type { AppLocale } from '../i18n/messages'
 import type { ForecastKpiSnapshot } from '../types/forecast'
 
-type ScreenId = 'dataset' | 'scenarios' | 'forecast' | 'comparison' | 'export'
+type ScreenId = 'dataset' | 'scenarios' | 'forecast' | 'comparison' | 'history' | 'export'
 
 defineProps<{
   userName?: string | null
@@ -209,6 +226,13 @@ const kpiSnapshot = computed<ForecastKpiSnapshot | null>(() => {
   }
 })
 
+onMounted(() => {
+  void workspace.refreshHistory()
+  void workspace.editor.refreshUserPresets().catch(() => {
+    // user-facing message is shown only when action is explicitly requested
+  })
+})
+
 async function handleFileInput(event: Event) {
   await workspace.onFileInput(event)
   if (workspace.datasetFlow.dataset.value) {
@@ -229,5 +253,27 @@ async function handleFastRun() {
 async function handleRunSavedScenario(id: string) {
   activeScreen.value = 'forecast'
   await workspace.runSavedScenarioById(id)
+}
+
+async function handleHistoryRefresh() {
+  workspace.history.page.value = 1
+  await workspace.refreshHistory()
+}
+
+async function handleLoadFromHistory(jobId: string) {
+  activeScreen.value = 'scenarios'
+  await workspace.loadScenarioFromHistory(jobId)
+}
+
+async function handleHistoryPrevPage() {
+  if (workspace.history.page.value <= 1) return
+  workspace.history.page.value -= 1
+  await workspace.refreshHistory()
+}
+
+async function handleHistoryNextPage() {
+  if (workspace.history.page.value >= workspace.history.totalPages.value) return
+  workspace.history.page.value += 1
+  await workspace.refreshHistory()
 }
 </script>

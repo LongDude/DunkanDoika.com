@@ -367,9 +367,37 @@ code {
   margin-top: 14px;
 }
 
+.preset-name-field {
+  min-width: 260px;
+  flex: 1;
+}
+
 .row-actions {
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
+}
+
+.history-filters {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.history-bulk-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.history-pagination {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
   flex-wrap: wrap;
 }
 
@@ -641,7 +669,8 @@ summary {
   .dataset-grid,
   .kpi-grid,
   .adv-grid,
-  .charts-grid {
+  .charts-grid,
+  .history-filters {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -689,7 +718,8 @@ summary {
   .dataset-grid,
   .kpi-grid,
   .adv-grid,
-  .charts-grid {
+  .charts-grid,
+  .history-filters {
     grid-template-columns: 1fr;
   }
 }
