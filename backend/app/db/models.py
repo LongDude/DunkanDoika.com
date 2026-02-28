@@ -27,6 +27,7 @@ class DatasetModel(Base):
     n_rows: Mapped[int] = mapped_column(Integer, nullable=False)
     report_date_suggested: Mapped[date | None] = mapped_column(Date, nullable=True)
     status_counts_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    quality_issues_json: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=now_utc)
 
     scenarios: Mapped[list["ScenarioModel"]] = relationship(back_populates="dataset", cascade="all,delete")

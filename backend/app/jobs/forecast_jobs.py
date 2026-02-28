@@ -33,6 +33,10 @@ def _retry(op: Callable[[], T], retries: int = 3, base_delay: float = 0.5) -> T:
     raise RuntimeError("unreachable")
 
 
+def _worker_error(error_code: str, message: str) -> str:
+    return f"{error_code}: {message}"
+
+
 def run_forecast_job(forecast_job_id: str) -> None:
     session = SessionLocal()
     try:
@@ -64,7 +68,7 @@ def run_forecast_job(forecast_job_id: str) -> None:
 
         dataset_row = datasets.get(params.dataset_id)
         if dataset_row is None:
-            failed = jobs.mark_failed(forecast_job_id, "DATASET_NOT_FOUND: dataset metadata missing")
+            failed = jobs.mark_failed(forecast_job_id, _worker_error("DATASET_NOT_FOUND", "dataset metadata missing"))
             if failed is not None:
                 publish_job_event(
                     forecast_job_id,
@@ -85,7 +89,10 @@ def run_forecast_job(forecast_job_id: str) -> None:
                 lambda: storage_client.get_bytes(storage_client.datasets_bucket, dataset_row.object_key)
             )
         except S3Error:
-            failed = jobs.mark_failed(forecast_job_id, "DATASET_OBJECT_MISSING: dataset object missing in storage")
+            failed = jobs.mark_failed(
+                forecast_job_id,
+                _worker_error("DATASET_OBJECT_MISSING", "dataset object missing in storage"),
+            )
             if failed is not None:
                 publish_job_event(
                     forecast_job_id,
@@ -133,6 +140,8 @@ def run_forecast_job(forecast_job_id: str) -> None:
             parallel_enabled=settings.mc_parallel_enabled,
             max_processes=settings.mc_max_processes,
             batch_size=settings.mc_batch_size,
+            dim_mode=params.dim_mode or settings.dim_mode,
+            simulation_version=settings.simulation_version,
             progress_callback=on_progress,
         )
 
@@ -176,7 +185,10 @@ def run_forecast_job(forecast_job_id: str) -> None:
                 },
             )
     except Exception as exc:
-        failed = ForecastJobRepository(session).mark_failed(forecast_job_id, f"INTERNAL_ERROR: {exc}")
+        failed = ForecastJobRepository(session).mark_failed(
+            forecast_job_id,
+            _worker_error("INTERNAL_ERROR", str(exc)),
+        )
         if failed is not None:
             publish_job_event(
                 forecast_job_id,

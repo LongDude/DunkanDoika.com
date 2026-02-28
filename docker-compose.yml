@@ -73,6 +73,8 @@ services:
       MC_MAX_PROCESSES: ${MC_MAX_PROCESSES}
       MC_BATCH_SIZE: ${MC_BATCH_SIZE}
       WS_HEARTBEAT_SECONDS: ${WS_HEARTBEAT_SECONDS}
+      DIM_MODE: ${DIM_MODE}
+      SIMULATION_VERSION: ${SIMULATION_VERSION}
     ports:
       - "${BACKEND_PORT}:8000"
     depends_on:
@@ -104,6 +106,8 @@ services:
       MC_MAX_PROCESSES: ${MC_MAX_PROCESSES}
       MC_BATCH_SIZE: ${MC_BATCH_SIZE}
       WS_HEARTBEAT_SECONDS: ${WS_HEARTBEAT_SECONDS}
+      DIM_MODE: ${DIM_MODE}
+      SIMULATION_VERSION: ${SIMULATION_VERSION}
     depends_on:
       postgres:
         condition: service_healthy

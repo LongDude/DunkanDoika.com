@@ -1,6 +1,6 @@
 from __future__ import annotations
-import os
 from functools import lru_cache
+from typing import Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -27,6 +27,8 @@ class Settings(BaseSettings):
     mc_max_processes: int = Field(default=24)
     mc_batch_size: int = Field(default=32)
     ws_heartbeat_seconds: int = Field(default=15)
+    dim_mode: Literal["from_calving", "from_dataset_field"] = Field(default="from_calving")
+    simulation_version: str = Field(default="1.1.0")
 
     @property
     def allowed_cors_origins_list(self) -> list[str]:

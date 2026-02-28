@@ -21,6 +21,7 @@ function createDefaultFormState(reportDate: string): ScenarioFormState {
     report_date: reportDate,
     horizon_months: 36,
     future_date: null,
+    dim_mode: 'from_calving',
     mc_runs: 50,
     seed: 42,
     service_period: {
@@ -203,6 +204,7 @@ export function useScenarioEditor(options: ScenarioEditorOptions) {
       report_date: form.value.report_date,
       horizon_months: form.value.horizon_months,
       future_date: form.value.future_date || null,
+      dim_mode: form.value.dim_mode || 'from_calving',
       mc_runs: form.value.mc_runs,
       seed: form.value.seed,
       service_period: { ...form.value.service_period },
@@ -223,6 +225,7 @@ export function useScenarioEditor(options: ScenarioEditorOptions) {
       report_date: params.report_date,
       horizon_months: params.horizon_months,
       future_date: params.future_date || null,
+      dim_mode: params.dim_mode || 'from_calving',
       mc_runs: params.mc_runs,
       seed: params.seed,
       service_period: { ...params.service_period },

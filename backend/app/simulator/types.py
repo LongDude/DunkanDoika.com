@@ -38,6 +38,9 @@ class Animal:
     # internal: prevent duplicate scheduling
     planned_success_insem_date: Optional[date] = None
     planned_cull_date: Optional[date] = None
+    # Anchor for DIM calculation when mode uses dataset DIM as baseline.
+    dim_anchor_date: Optional[date] = None
+    dim_anchor_value: Optional[int] = None
 
     def is_alive_on(self, d: date) -> bool:
         return self.archive_date is None or self.archive_date > d

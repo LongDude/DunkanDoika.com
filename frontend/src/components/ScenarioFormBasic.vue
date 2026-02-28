@@ -38,6 +38,13 @@
         <input type="number" min="1" max="30000" v-model.number="editor.form.value.mc_runs" />
         <small v-if="fieldIssue('mc_runs')" class="field-error">{{ fieldIssue('mc_runs') }}</small>
       </label>
+      <label>
+        {{ t('scenario.dimMode') }}
+        <select v-model="editor.form.value.dim_mode">
+          <option value="from_calving">{{ t('scenario.dimModeFromCalving') }}</option>
+          <option value="from_dataset_field">{{ t('scenario.dimModeFromDataset') }}</option>
+        </select>
+      </label>
     </div>
 
     <div class="validation-block" v-if="editor.validationIssues.value.length">

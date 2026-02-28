@@ -33,6 +33,12 @@
         <p v-if="workspace.runLayer.lastRunAt.value" class="muted">
           {{ t('run.lastRunAt') }}: {{ formattedLastRunAt }}
         </p>
+        <p v-if="resultDimModeLabel" class="muted">
+          {{ t('run.dimMode') }}: {{ resultDimModeLabel }}
+        </p>
+        <p v-if="workspace.runLayer.result.value?.meta?.simulation_version" class="muted">
+          {{ t('run.simulationVersion') }}: {{ workspace.runLayer.result.value?.meta?.simulation_version }}
+        </p>
       </section>
 
       <ForecastKpiCards :snapshot="kpiSnapshot" />
@@ -161,6 +167,16 @@ const runStatusLabel = computed(() => {
 })
 
 const formattedLastRunAt = computed(() => formatDate(workspace.runLayer.lastRunAt.value, currentLocale.value))
+const resultDimModeLabel = computed(() => {
+  const mode = workspace.runLayer.result.value?.meta?.dim_mode
+  if (mode === 'from_dataset_field') {
+    return t('scenario.dimModeFromDataset')
+  }
+  if (mode === 'from_calving') {
+    return t('scenario.dimModeFromCalving')
+  }
+  return null
+})
 
 const kpiSnapshot = computed<ForecastKpiSnapshot | null>(() => {
   const result = workspace.runLayer.result.value

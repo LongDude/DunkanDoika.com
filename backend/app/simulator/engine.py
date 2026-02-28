@@ -3,7 +3,7 @@ from __future__ import annotations
 import heapq
 from dataclasses import dataclass
 from datetime import date, timedelta
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Literal, Optional, Tuple
 
 import numpy as np
 
@@ -18,6 +18,7 @@ class EngineConfig:
     heifer_policy: HeiferInsemPolicy
     cull_policy: CullingPolicy
     replacement_policy: ReplacementPolicy
+    dim_mode: Literal["from_calving", "from_dataset_field"] = "from_calving"
 
 @dataclass
 class MonthlyEvents:
@@ -160,6 +161,8 @@ class SimulationEngine:
         a.next_calving_date = None
         a.dryoff_date = None
         a.planned_success_insem_date = None
+        a.dim_anchor_date = t
+        a.dim_anchor_value = 0
 
         self._bump_month_counter(t, "calvings")
 
@@ -266,11 +269,22 @@ class SimulationEngine:
         return milking, dry, heifer, preg_heifer
 
     def avg_days_in_milk_on(self, d: date) -> Optional[float]:
+        def estimate_dim(animal: Animal) -> Optional[int]:
+            if self.cfg.dim_mode == "from_dataset_field":
+                if animal.dim_anchor_date is not None and animal.dim_anchor_value is not None:
+                    return max(0, int(animal.dim_anchor_value + (d - animal.dim_anchor_date).days))
+            if animal.last_calving_date is None:
+                return None
+            return max(0, (d - animal.last_calving_date).days)
+
         total = 0
         n = 0
         for a in self.animals.values():
-            if a.in_milking_on(d) and a.last_calving_date is not None:
-                total += (d - a.last_calving_date).days
+            if a.in_milking_on(d):
+                dim = estimate_dim(a)
+                if dim is None:
+                    continue
+                total += dim
                 n += 1
         if n == 0:
             return None

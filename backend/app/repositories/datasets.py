@@ -8,7 +8,7 @@ from typing import Optional
 from sqlalchemy.orm import Session
 
 from app.db.models import DatasetModel
-from app.simulator.loader import COL_STATUS, load_dataset_df, suggest_report_date
+from app.simulator.loader import COL_STATUS, load_dataset_with_quality
 from app.storage.object_storage import storage_client
 
 
@@ -17,10 +17,11 @@ class DatasetRepository:
         self.session = session
 
     def create_dataset(self, original_filename: str, file_bytes: bytes) -> DatasetModel:
-        df = load_dataset_df(io.BytesIO(file_bytes))
+        loaded = load_dataset_with_quality(io.BytesIO(file_bytes))
+        df = loaded.dataframe
         status_counts_raw = df[COL_STATUS].value_counts(dropna=False).to_dict()
         status_counts = {str(k): int(v) for k, v in status_counts_raw.items()}
-        report_date_suggested: Optional[date] = suggest_report_date(df)
+        report_date_suggested: Optional[date] = loaded.report_date_suggested
 
         dataset_id = str(uuid.uuid4())
         object_key = f"datasets/{dataset_id}.csv"
@@ -33,6 +34,7 @@ class DatasetRepository:
             n_rows=int(len(df)),
             report_date_suggested=report_date_suggested,
             status_counts_json=status_counts,
+            quality_issues_json=loaded.quality_issues,
         )
         self.session.add(dataset)
         self.session.commit()

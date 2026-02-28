@@ -13,6 +13,7 @@ from app.api.errors import api_error
 from app.api.schemas import (
     CreateForecastJobResponse,
     DatasetInfo,
+    DatasetQualityIssue,
     DatasetUploadResponse,
     ForecastJobInfo,
     ForecastJobStatus,
@@ -30,6 +31,7 @@ from app.queueing import enqueue_forecast_job
 from app.repositories.datasets import DatasetRepository
 from app.repositories.forecast_jobs import ForecastJobRepository
 from app.repositories.scenarios import ScenarioRepository
+from app.simulator.loader import DatasetValidationError
 from app.storage.object_storage import storage_client
 
 router = APIRouter()
@@ -83,6 +85,7 @@ def _to_dataset_upload_response(item) -> DatasetUploadResponse:
         n_rows=item.n_rows,
         report_date_suggested=item.report_date_suggested,
         status_counts=item.status_counts_json,
+        quality_issues=item.quality_issues_json or [],
     )
 
 
@@ -92,6 +95,7 @@ def _to_dataset_info(item) -> DatasetInfo:
         n_rows=item.n_rows,
         report_date_suggested=item.report_date_suggested,
         status_counts=item.status_counts_json,
+        quality_issues=item.quality_issues_json or [],
         original_filename=item.original_filename,
         created_at=item.created_at,
     )
@@ -174,6 +178,8 @@ async def upload_dataset(
     datasets = DatasetRepository(session)
     try:
         row = datasets.create_dataset(filename, content)
+    except DatasetValidationError as exc:
+        raise api_error(422, exc.error_code, str(exc), exc.details)
     except Exception as exc:
         raise api_error(422, "DATASET_PARSE_FAILED", "Failed to parse dataset", {"reason": str(exc)})
     return _to_dataset_upload_response(row)
@@ -185,6 +191,14 @@ def get_dataset_info(dataset_id: str, session: Session = Depends(get_db_session)
     if dataset is None:
         raise api_error(404, "DATASET_NOT_FOUND", "Dataset not found")
     return _to_dataset_info(dataset)
+
+
+@router.get("/datasets/{dataset_id}/quality", response_model=list[DatasetQualityIssue])
+def get_dataset_quality(dataset_id: str, session: Session = Depends(get_db_session)) -> list[DatasetQualityIssue]:
+    dataset = DatasetRepository(session).get(dataset_id)
+    if dataset is None:
+        raise api_error(404, "DATASET_NOT_FOUND", "Dataset not found")
+    return dataset.quality_issues_json or []
 
 
 @router.post("/scenarios", response_model=ScenarioDetail)

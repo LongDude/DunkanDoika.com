@@ -11,6 +11,9 @@ export function useDatasetWorkflow() {
 
   const qualityIssues = computed<DatasetQualityIssue[]>(() => {
     if (!dataset.value) return []
+    if (dataset.value.quality_issues && dataset.value.quality_issues.length > 0) {
+      return dataset.value.quality_issues
+    }
     const issues: DatasetQualityIssue[] = []
 
     if (!dataset.value.report_date_suggested) {

@@ -43,6 +43,8 @@ class ForecastJobRepository:
         job = self.get(job_id)
         if job is None:
             return None
+        if job.status in {ForecastJobStatus.SUCCEEDED.value, ForecastJobStatus.FAILED.value, ForecastJobStatus.CANCELED.value}:
+            return job
         job.status = ForecastJobStatus.RUNNING.value
         job.progress_pct = progress_pct
         job.completed_runs = 0
@@ -63,6 +65,8 @@ class ForecastJobRepository:
         job = self.get(job_id)
         if job is None:
             return None
+        if job.status != ForecastJobStatus.RUNNING.value:
+            return job
         job.progress_pct = max(0, min(100, progress_pct))
         if completed_runs is not None:
             job.completed_runs = max(0, completed_runs)
@@ -76,6 +80,8 @@ class ForecastJobRepository:
         job = self.get(job_id)
         if job is None:
             return None
+        if job.status in {ForecastJobStatus.SUCCEEDED.value, ForecastJobStatus.FAILED.value, ForecastJobStatus.CANCELED.value}:
+            return job
         job.status = ForecastJobStatus.FAILED.value
         job.error_message = message
         job.finished_at = now_utc()
@@ -93,6 +99,8 @@ class ForecastJobRepository:
         job = self.get(job_id)
         if job is None:
             return None
+        if job.status in {ForecastJobStatus.SUCCEEDED.value, ForecastJobStatus.FAILED.value, ForecastJobStatus.CANCELED.value}:
+            return job
         job.status = ForecastJobStatus.SUCCEEDED.value
         job.progress_pct = 100
         job.completed_runs = max(job.completed_runs, job.total_runs)

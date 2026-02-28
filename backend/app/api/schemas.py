@@ -67,6 +67,7 @@ class ScenarioParams(BaseModel):
     report_date: date
     horizon_months: int = Field(default=36, ge=1, le=120)
     future_date: Optional[date] = None
+    dim_mode: Optional[Literal["from_calving", "from_dataset_field"]] = None
     seed: int = 42
     mc_runs: int = Field(default=1, ge=1, le=50000)
     service_period: ServicePeriodParams = Field(default_factory=ServicePeriodParams)
@@ -83,11 +84,26 @@ class ScenarioParams(BaseModel):
         return value
 
 
+class DatasetQualityIssue(BaseModel):
+    code: str
+    severity: Literal["info", "warning", "error"]
+    message: str
+    row_count: Optional[int] = None
+    sample_rows: Optional[List[int]] = None
+
+
+class ForecastResultMeta(BaseModel):
+    dim_mode: Literal["from_calving", "from_dataset_field"]
+    assumptions: List[str] = Field(default_factory=list)
+    simulation_version: str
+
+
 class DatasetUploadResponse(BaseModel):
     dataset_id: str
     n_rows: int
     report_date_suggested: Optional[date] = None
     status_counts: Dict[str, int]
+    quality_issues: List[DatasetQualityIssue] = Field(default_factory=list)
 
 
 class DatasetInfo(DatasetUploadResponse):
@@ -123,6 +139,7 @@ class ForecastResult(BaseModel):
     series_p90: Optional[ForecastSeries] = None
     events: List[EventsByMonth]
     future_point: Optional[ForecastPoint] = None
+    meta: Optional[ForecastResultMeta] = None
 
 
 class ScenarioCreateRequest(BaseModel):

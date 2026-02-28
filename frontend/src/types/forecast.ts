@@ -3,6 +3,7 @@ export type DatasetUploadResponse = {
   n_rows: number
   report_date_suggested?: string | null
   status_counts: Record<string, number>
+  quality_issues?: DatasetQualityIssue[]
 }
 
 export type DatasetQualityIssueSeverity = 'info' | 'warning' | 'error'
@@ -10,6 +11,8 @@ export type DatasetQualityIssue = {
   code: string
   severity: DatasetQualityIssueSeverity
   message: string
+  row_count?: number
+  sample_rows?: number[]
 }
 
 export type ForecastPoint = {
@@ -32,12 +35,19 @@ export type EventsByMonth = {
   heifer_intros: number
 }
 
+export type ForecastResultMeta = {
+  dim_mode: 'from_calving' | 'from_dataset_field'
+  assumptions: string[]
+  simulation_version: string
+}
+
 export type ForecastResult = {
   series_p50: ForecastSeries
   series_p10?: ForecastSeries | null
   series_p90?: ForecastSeries | null
   events: EventsByMonth[]
   future_point?: ForecastPoint | null
+  meta?: ForecastResultMeta | null
 }
 
 export type ForecastJobStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'canceled'
@@ -115,11 +125,14 @@ export type ReplacementParams = {
   lookahead_months: number
 }
 
+export type DimMode = 'from_calving' | 'from_dataset_field'
+
 export type ScenarioParams = {
   dataset_id: string
   report_date: string
   horizon_months: number
   future_date?: string | null
+  dim_mode?: DimMode | null
   seed: number
   mc_runs: number
   service_period: ServicePeriodParams

@@ -29,7 +29,10 @@
       <ul v-if="issues.length" class="quality-list">
         <li v-for="issue in issues" :key="issue.code" :class="['quality-item', issue.severity]">
           <span class="severity">{{ t(`common.${issue.severity}`) }}</span>
-          <span>{{ issue.message }}</span>
+          <span>
+            {{ issue.message }}
+            <template v-if="issue.row_count"> ({{ formatNumber(issue.row_count, localeAsApp) }})</template>
+          </span>
         </li>
       </ul>
       <div v-else class="quality-ok">{{ t('datasetQuality.allGood') }}</div>

@@ -3,23 +3,39 @@ from __future__ import annotations
 import io
 from concurrent.futures import ProcessPoolExecutor
 from datetime import date, timedelta
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Literal, Optional, Tuple
 
 import numpy as np
 import pandas as pd
 
-from app.api.schemas import ScenarioParams, ForecastResult, ForecastSeries, ForecastPoint, EventsByMonth
-from app.simulator.types import Animal, Status, EventType
-from app.simulator.engine import SimulationEngine, EngineConfig
-from app.simulator.policies import ServicePeriodPolicy, HeiferInsemPolicy, CullingPolicy, ReplacementPolicy
+from app.api.schemas import (
+    EventsByMonth,
+    ForecastPoint,
+    ForecastResult,
+    ForecastResultMeta,
+    ForecastSeries,
+    ScenarioParams,
+)
+from app.simulator.engine import EngineConfig, SimulationEngine
+from app.simulator.loader import (
+    COL_ANIMAL_ID,
+    COL_ARCHIVE_DATE,
+    COL_BIRTH_DATE,
+    COL_DAYS_IN_MILK,
+    COL_DRYOFF_DATE,
+    COL_LACTATION,
+    COL_LACTATION_START,
+    COL_SUCCESS_INSEM_DATE,
+)
+from app.simulator.policies import CullingPolicy, HeiferInsemPolicy, ReplacementPolicy, ServicePeriodPolicy
+from app.simulator.types import Animal, EventType, Status
 
 
 def none_if_na(x):
     return None if pd.isna(x) else x
 
+
 def month_starts_next(from_date: date, months: int) -> List[date]:
-    """First day of each next month, length = months."""
-    # start from first day of next month
     if from_date.month == 12:
         y, m = from_date.year + 1, 1
     else:
@@ -33,17 +49,19 @@ def month_starts_next(from_date: date, months: int) -> List[date]:
             y += 1
     return out
 
+
 def build_initial_animals(df: pd.DataFrame, report_date: date) -> Dict[int, Animal]:
     animals: Dict[int, Animal] = {}
 
     for _, r in df.iterrows():
-        aid = int(r["Номер животного"])
-        birth = r["Дата рождения"]
-        lact = int(r["Лактация"]) if pd.notna(r["Лактация"]) else 0
-        arch = none_if_na(r.get("Дата архива", None))
-        last_calv = none_if_na(r.get("Дата начала тек.лакт", None))
-        success = none_if_na(r.get("Дата успешного осеменения", None))
-        dryoff = none_if_na(r.get("Дата запуска тек.лакт", None))
+        aid = int(r[COL_ANIMAL_ID])
+        birth = r[COL_BIRTH_DATE]
+        lact = int(r[COL_LACTATION]) if pd.notna(r[COL_LACTATION]) else 0
+        arch = none_if_na(r.get(COL_ARCHIVE_DATE, None))
+        last_calv = none_if_na(r.get(COL_LACTATION_START, None))
+        success = none_if_na(r.get(COL_SUCCESS_INSEM_DATE, None))
+        dryoff = none_if_na(r.get(COL_DRYOFF_DATE, None))
+        dim_days = none_if_na(r.get(COL_DAYS_IN_MILK, None))
 
         a = Animal(
             animal_id=aid,
@@ -54,13 +72,18 @@ def build_initial_animals(df: pd.DataFrame, report_date: date) -> Dict[int, Anim
             dryoff_date=dryoff,
             archive_date=arch,
         )
+        if lact > 0 and dim_days is not None:
+            try:
+                a.dim_anchor_date = report_date
+                a.dim_anchor_value = max(0, int(dim_days))
+            except Exception:
+                a.dim_anchor_date = None
+                a.dim_anchor_value = None
 
-        # Determine status on report_date
         if arch is not None and arch <= report_date:
             a.status = Status.ARCHIVED
         else:
             if lact == 0:
-                # heifer/pregnant heifer
                 if success is not None:
                     calv = success + timedelta(days=280)
                     if calv > report_date:
@@ -71,19 +94,16 @@ def build_initial_animals(df: pd.DataFrame, report_date: date) -> Dict[int, Anim
                 else:
                     a.status = Status.HEIFER
             else:
-                # cow
                 if dryoff is not None and dryoff <= report_date:
                     a.status = Status.DRY
                 else:
                     a.status = Status.MILKING
 
-                # if pregnant and next calving in future, store it
                 if success is not None:
                     calv = success + timedelta(days=280)
                     if calv > report_date:
                         a.next_calving_date = calv
 
-                # if dry cow but missing success, infer from dryoff (220d)
                 if a.status == Status.DRY and a.success_insem_date is None and a.dryoff_date is not None:
                     inferred_success = a.dryoff_date - timedelta(days=220)
                     a.success_insem_date = inferred_success
@@ -93,12 +113,17 @@ def build_initial_animals(df: pd.DataFrame, report_date: date) -> Dict[int, Anim
 
     return animals
 
-def run_one(df: pd.DataFrame, params: ScenarioParams, seed: int) -> Tuple[List[dict], Dict[date, dict], Optional[dict]]:
+
+def run_one(
+    df: pd.DataFrame,
+    params: ScenarioParams,
+    seed: int,
+    dim_mode: Literal["from_calving", "from_dataset_field"] = "from_calving",
+) -> Tuple[List[dict], Dict[date, dict], Optional[dict]]:
     report_date = params.report_date
     horizon_end = report_date + timedelta(days=30 * params.horizon_months)
 
     animals = build_initial_animals(df, report_date)
-
     rng = np.random.default_rng(seed)
 
     service = ServicePeriodPolicy(
@@ -135,21 +160,18 @@ def run_one(df: pd.DataFrame, params: ScenarioParams, seed: int) -> Tuple[List[d
         heifer_policy=heifer,
         cull_policy=cull,
         replacement_policy=repl,
+        dim_mode=dim_mode,
     )
-
     eng = SimulationEngine(animals=animals, rng=rng, cfg=cfg)
 
-    # schedule known future events from dataset first
     for a in eng.animals.values():
         if a.status == Status.ARCHIVED:
             continue
-        # known next calving from dataset success_insem
         if a.success_insem_date is not None:
             calv = a.success_insem_date + timedelta(days=280)
             if calv > report_date and calv <= horizon_end:
                 eng.push(calv, EventType.CALVING, a.animal_id)
                 a.next_calving_date = calv
-            # dryoff: prefer explicit date, else rule +220
             if a.lactation_no > 0:
                 if a.dryoff_date is not None and a.dryoff_date > report_date and a.dryoff_date <= horizon_end:
                     eng.push(a.dryoff_date, EventType.DRYOFF, a.animal_id)
@@ -158,7 +180,6 @@ def run_one(df: pd.DataFrame, params: ScenarioParams, seed: int) -> Tuple[List[d
                     if dry > report_date and dry <= horizon_end:
                         eng.push(dry, EventType.DRYOFF, a.animal_id)
 
-    # apply purchases (events at date_in)
     for p in params.purchases:
         payload = {
             "count": p.count,
@@ -167,19 +188,15 @@ def run_one(df: pd.DataFrame, params: ScenarioParams, seed: int) -> Tuple[List[d
         }
         eng.push(p.date_in, EventType.PURCHASE_IN, None, payload=payload)
 
-    # init schedules (culls + insems for non-pregnant)
     eng.init_schedules(report_date)
 
-    # snapshots: first day of months, plus optional future_date
     snaps = [report_date] + month_starts_next(report_date, params.horizon_months)
     future_point = None
     if params.future_date is not None and report_date <= params.future_date <= horizon_end:
-        # insert while preserving order
         if params.future_date not in snaps:
             snaps = sorted(snaps + [params.future_date])
     series = eng.run(snaps)
 
-    # convert month_events to dict per month
     events = {}
     for m, v in eng.month_events.items():
         events[m] = {
@@ -191,7 +208,6 @@ def run_one(df: pd.DataFrame, params: ScenarioParams, seed: int) -> Tuple[List[d
             "heifer_intros": v.heifer_intros,
         }
 
-    # pull future point if needed
     if params.future_date is not None:
         for row in series:
             if row["date"] == params.future_date:
@@ -200,43 +216,47 @@ def run_one(df: pd.DataFrame, params: ScenarioParams, seed: int) -> Tuple[List[d
 
     return series, events, future_point
 
+
 ProgressCallback = Callable[[int, int, ForecastResult], None]
 
 _WORKER_DF: pd.DataFrame | None = None
 _WORKER_PARAMS: ScenarioParams | None = None
+_WORKER_DIM_MODE: Literal["from_calving", "from_dataset_field"] = "from_calving"
 
 
-def _init_mc_worker(df_payload: bytes, params_payload: dict) -> None:
-    global _WORKER_DF, _WORKER_PARAMS
+def _init_mc_worker(
+    df_payload: bytes,
+    params_payload: dict,
+    dim_mode: Literal["from_calving", "from_dataset_field"],
+) -> None:
+    global _WORKER_DF, _WORKER_PARAMS, _WORKER_DIM_MODE
     _WORKER_DF = pd.read_pickle(io.BytesIO(df_payload))
     _WORKER_PARAMS = ScenarioParams.model_validate(params_payload)
+    _WORKER_DIM_MODE = dim_mode
 
 
 def _run_one_from_worker(seed: int) -> Tuple[List[dict], Dict[date, dict], Optional[dict]]:
     if _WORKER_DF is None or _WORKER_PARAMS is None:
         raise RuntimeError("MC worker is not initialized")
-    return run_one(_WORKER_DF, _WORKER_PARAMS, seed)
+    return run_one(_WORKER_DF, _WORKER_PARAMS, seed, _WORKER_DIM_MODE)
 
 
 def _to_series(rows: List[dict]) -> ForecastSeries:
     pts = [ForecastPoint(**r) for r in rows]
     return ForecastSeries(points=pts)
 
+
 def _percentile_series(runs: List[List[dict]], q: float) -> List[dict]:
-    # assumes same dates in each run, same length
     dates = [r["date"] for r in runs[0]]
     out = []
-    for i, d in enumerate(dates):
+    for i, _d in enumerate(dates):
         vals = [run[i]["avg_days_in_milk"] for run in runs if run[i]["avg_days_in_milk"] is not None]
-        if len(vals) == 0:
-            avg = None
-        else:
-            avg = float(np.percentile(vals, q))
-        # counts: take median (should be similar), but we can take first run for simplicity
+        avg = None if len(vals) == 0 else float(np.percentile(vals, q))
         base = runs[0][i].copy()
         base["avg_days_in_milk"] = avg
         out.append(base)
     return out
+
 
 def _accumulate_events(events_accum: Dict[date, dict], batch_events: Dict[date, dict]) -> None:
     for month, event_item in batch_events.items():
@@ -247,12 +267,29 @@ def _accumulate_events(events_accum: Dict[date, dict], batch_events: Dict[date, 
             events_accum[month][key] += event_item[key]
 
 
+def _build_meta(
+    dim_mode: Literal["from_calving", "from_dataset_field"],
+    simulation_version: str,
+) -> ForecastResultMeta:
+    return ForecastResultMeta(
+        dim_mode=dim_mode,
+        assumptions=[
+            "gestation_days=280",
+            "dryoff_after_success_insem_days=220",
+            "female_birth_probability=0.5",
+        ],
+        simulation_version=simulation_version,
+    )
+
+
 def _build_result_from_runs(
     *,
     runs: List[List[dict]],
     events_accum: Dict[date, dict],
     completed_runs: int,
     params: ScenarioParams,
+    dim_mode: Literal["from_calving", "from_dataset_field"],
+    simulation_version: str,
 ) -> ForecastResult:
     events_list: list[EventsByMonth] = []
     event_divider = max(1, completed_runs)
@@ -272,7 +309,12 @@ def _build_result_from_runs(
                 if point["date"] == params.future_date:
                     fp = ForecastPoint(**point)
                     break
-        return ForecastResult(series_p50=p50, events=events_list, future_point=fp)
+        return ForecastResult(
+            series_p50=p50,
+            events=events_list,
+            future_point=fp,
+            meta=_build_meta(dim_mode, simulation_version),
+        )
 
     p50_rows = _percentile_series(runs, 50)
     p10_rows = _percentile_series(runs, 10)
@@ -291,6 +333,7 @@ def _build_result_from_runs(
         series_p90=_to_series(p90_rows),
         events=events_list,
         future_point=fp,
+        meta=_build_meta(dim_mode, simulation_version),
     )
 
 
@@ -301,6 +344,8 @@ def run_forecast(
     parallel_enabled: bool = False,
     max_processes: int = 4,
     batch_size: int = 8,
+    dim_mode: Literal["from_calving", "from_dataset_field"] = "from_calving",
+    simulation_version: str = "1.1.0",
     progress_callback: ProgressCallback | None = None,
 ) -> ForecastResult:
     runs: list[list[dict]] = []
@@ -327,6 +372,8 @@ def run_forecast(
                 events_accum=events_accum,
                 completed_runs=completed_runs,
                 params=params,
+                dim_mode=dim_mode,
+                simulation_version=simulation_version,
             )
             progress_callback(completed_runs, total_runs, partial)
 
@@ -340,7 +387,7 @@ def run_forecast(
         with ProcessPoolExecutor(
             max_workers=process_count,
             initializer=_init_mc_worker,
-            initargs=(df_payload, params_payload),
+            initargs=(df_payload, params_payload, dim_mode),
         ) as pool:
             for start in range(0, total_runs, safe_batch_size):
                 seed_batch = all_seeds[start : start + safe_batch_size]
@@ -351,7 +398,7 @@ def run_forecast(
             batch_results: list[Tuple[List[dict], Dict[date, dict], Optional[dict]]] = []
             for i in range(start, min(start + safe_batch_size, total_runs)):
                 seed = params.seed + i * 9973
-                batch_results.append(run_one(df, params, seed))
+                batch_results.append(run_one(df, params, seed, dim_mode))
             on_batch_done(batch_results)
 
     return _build_result_from_runs(
@@ -359,4 +406,6 @@ def run_forecast(
         events_accum=events_accum,
         completed_runs=max(1, completed_runs),
         params=params,
+        dim_mode=dim_mode,
+        simulation_version=simulation_version,
     )
