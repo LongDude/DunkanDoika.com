@@ -105,7 +105,7 @@ export function useScenarioEditor(options: ScenarioEditorOptions) {
     if (f.horizon_months < 1 || f.horizon_months > 120) {
       issues.push({ field: 'horizon_months', severity: 'error', message: t('validation.horizonRange') })
     }
-    if (f.mc_runs < 1 || f.mc_runs > 300) {
+    if (f.mc_runs < 1 || f.mc_runs > 30000) {
       issues.push({ field: 'mc_runs', severity: 'error', message: t('validation.mcRunsRange') })
     }
     if (f.heifer_insem.min_age_days > f.heifer_insem.max_age_days) {

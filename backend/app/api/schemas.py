@@ -68,7 +68,7 @@ class ScenarioParams(BaseModel):
     horizon_months: int = Field(default=36, ge=1, le=120)
     future_date: Optional[date] = None
     seed: int = 42
-    mc_runs: int = Field(default=1, ge=1, le=500)
+    mc_runs: int = Field(default=1, ge=1, le=50000)
     service_period: ServicePeriodParams = Field(default_factory=ServicePeriodParams)
     heifer_insem: HeiferInsemParams = Field(default_factory=HeiferInsemParams)
     culling: CullingParams = Field(default_factory=CullingParams)

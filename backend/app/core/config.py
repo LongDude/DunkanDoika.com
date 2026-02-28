@@ -1,5 +1,5 @@
 from __future__ import annotations
-
+import os
 from functools import lru_cache
 
 from pydantic import Field
@@ -24,8 +24,8 @@ class Settings(BaseSettings):
     allowed_cors_origins: str = Field(default="http://127.0.0.1:5173,http://localhost:5173")
     stuck_job_timeout_minutes: int = Field(default=30)
     mc_parallel_enabled: bool = Field(default=True)
-    mc_max_processes: int = Field(default=4)
-    mc_batch_size: int = Field(default=8)
+    mc_max_processes: int = Field(default=24)
+    mc_batch_size: int = Field(default=32)
     ws_heartbeat_seconds: int = Field(default=15)
 
     @property
