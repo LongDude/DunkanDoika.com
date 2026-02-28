@@ -25,7 +25,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import AuthGate from './components/AuthGate.vue'
 import ForecastWorkspaceView from './components/ForecastWorkspaceView.vue'
@@ -35,6 +35,24 @@ import type { SsoLoginRequest, SsoOauthProvider, SsoPasswordResetRequest, SsoReg
 const { t } = useI18n()
 const auth = useAuth()
 const notice = ref<string | null>(null)
+const isAuthScreen = computed(() => auth.initializing.value || !auth.isAuthenticated.value)
+
+function setAuthScreenClass(enabled: boolean) {
+  if (typeof document === 'undefined') return
+  document.body.classList.toggle('auth-screen', enabled)
+}
+
+watch(
+  isAuthScreen,
+  value => {
+    setAuthScreenClass(value)
+  },
+  { immediate: true },
+)
+
+onUnmounted(() => {
+  setAuthScreenClass(false)
+})
 
 function clearQueryParams() {
   const url = new URL(window.location.href)

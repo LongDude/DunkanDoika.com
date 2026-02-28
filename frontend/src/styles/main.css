@@ -34,6 +34,15 @@ body {
   padding: 20px 24px 110px;
 }
 
+body.auth-screen {
+  overflow-y: hidden;
+}
+
+body.auth-screen #app {
+  min-height: 100vh;
+  padding: 0;
+}
+
 h1,
 h2,
 h3 {
