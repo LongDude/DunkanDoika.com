@@ -5,7 +5,11 @@
         <h1>{{ t('app.title') }}</h1>
         <p>{{ t('app.subtitle') }}</p>
       </div>
-      <LanguageSwitcher />
+      <div class="hero-actions">
+        <div v-if="userName" class="user-badge">{{ userName }}</div>
+        <button v-if="userName" type="button" @click="$emit('logout')">{{ t('auth.logoutAction') }}</button>
+        <LanguageSwitcher />
+      </div>
     </header>
 
     <nav class="screen-nav" :aria-label="t('aria.mainNavigation')">
@@ -35,10 +39,12 @@ type ScreenId = 'dataset' | 'scenarios' | 'forecast' | 'comparison' | 'export'
 
 defineProps<{
   activeScreen: ScreenId
+  userName?: string | null
 }>()
 
 defineEmits<{
   (e: 'change-screen', screen: ScreenId): void
+  (e: 'logout'): void
 }>()
 
 const { t } = useI18n()

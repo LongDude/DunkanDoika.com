@@ -123,6 +123,7 @@ services:
       context: ./frontend
       args:
         VITE_API_BASE_URL: ${VITE_API_BASE_URL}
+        VITE_SSO_API_BASE_URL: ${VITE_SSO_API_BASE_URL}
     ports:
       - "${FRONTEND_PORT}:80"
     depends_on:
