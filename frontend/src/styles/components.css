@@ -55,23 +55,23 @@
 
 .upload-row {
   display: flex;
+  flex-direction: column;
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
-  min-width: 500px;
   width: 100%;
 }
 
 .upload-label {
   min-width: 340px;
+  width: 100%;
   flex: 1;
 }
 
 .dataset-source-row {
   align-items: start;
   display: flex;
-  flex-direction: column;
-  min-width: 500px;
+  flex-direction: row;
 }
 
 .dataset-picker {
