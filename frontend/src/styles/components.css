@@ -58,8 +58,7 @@
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
-  min-width: 360px;
-
+  min-width: 500px;
   width: 100%;
 }
 
@@ -72,6 +71,7 @@
   align-items: start;
   display: flex;
   flex-direction: column;
+  min-width: 500px;
 }
 
 .dataset-picker {
