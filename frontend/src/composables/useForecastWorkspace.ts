@@ -71,6 +71,29 @@ export function useForecastWorkspace() {
     }
   }
 
+  async function refreshDatasetList() {
+    try {
+      await datasetFlow.fetchDatasets()
+    } catch (err) {
+      toast.notify('error', `${t('alerts.loadFailed')}: ${err instanceof Error ? err.message : ''}`)
+    }
+  }
+
+  async function selectDatasetById(selectedDatasetId: string) {
+    try {
+      const info = await datasetFlow.loadById(selectedDatasetId)
+      editor.resetForNewDataset(info.report_date_suggested ?? '')
+      await editor.refreshScenarioList()
+      await editor.refreshUserPresets()
+      comparison.clear()
+      runLayer.reset()
+      return info
+    } catch (err) {
+      toast.notify('error', `${t('alerts.loadFailed')}: ${err instanceof Error ? err.message : ''}`)
+      throw err
+    }
+  }
+
   async function refreshScenarioList() {
     try {
       await editor.refreshScenarioList()
@@ -272,6 +295,8 @@ export function useForecastWorkspace() {
     compareDisabledReason,
     undoDisabledReason,
     onFileInput,
+    refreshDatasetList,
+    selectDatasetById,
     refreshScenarioList,
     refreshHistory,
     runForecast,

@@ -248,6 +248,15 @@ async def upload_dataset(
     return _to_dataset_upload_response(row)
 
 
+@router.get("/datasets", response_model=list[DatasetInfo])
+def list_datasets(
+    limit: int = Query(default=100, ge=1, le=500),
+    session: Session = Depends(get_db_session),
+) -> list[DatasetInfo]:
+    rows = DatasetRepository(session).list(limit=limit)
+    return [_to_dataset_info(row) for row in rows]
+
+
 @router.get("/datasets/{dataset_id}", response_model=DatasetInfo)
 def get_dataset_info(dataset_id: str, session: Session = Depends(get_db_session)) -> DatasetInfo:
     dataset = DatasetRepository(session).get(dataset_id)

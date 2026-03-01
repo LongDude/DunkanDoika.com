@@ -101,6 +101,10 @@
     },
     dataset: {
       uploadLabel: 'Upload dataset (.csv)',
+      selectExisting: 'Use existing dataset',
+      selectExistingPlaceholder: 'Select dataset from list',
+      refreshList: 'Refresh list',
+      useSelected: 'Use selected',
       datasetId: 'Dataset ID',
       rows: 'Rows',
       reportDateSuggested: 'Suggested report date',
@@ -429,6 +433,10 @@
     },
     dataset: {
       uploadLabel: 'Загрузите датасет (.csv)',
+      selectExisting: 'Использовать существующий датасет',
+      selectExistingPlaceholder: 'Выберите датасет из списка',
+      refreshList: 'Обновить список',
+      useSelected: 'Использовать выбранный',
       datasetId: 'ID датасета',
       rows: 'Строк',
       reportDateSuggested: 'Рекомендуемая дата отчета',

@@ -5,6 +5,7 @@ import uuid
 from datetime import date
 from typing import Optional
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models import DatasetModel
@@ -43,6 +44,10 @@ class DatasetRepository:
 
     def get(self, dataset_id: str) -> DatasetModel | None:
         return self.session.get(DatasetModel, dataset_id)
+
+    def list(self, limit: int = 100) -> list[DatasetModel]:
+        stmt = select(DatasetModel).order_by(DatasetModel.created_at.desc()).limit(limit)
+        return list(self.session.scalars(stmt).all())
 
     def get_csv_bytes(self, dataset_id: str) -> bytes | None:
         dataset = self.get(dataset_id)

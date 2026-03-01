@@ -1,11 +1,14 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { getDatasetInfo, uploadDataset } from '../services/api'
+import { getDatasetInfo, listDatasets, uploadDataset } from '../services/api'
 import type { DatasetInfo, DatasetQualityIssue, DatasetUploadResponse } from '../types/forecast'
 
 export function useDatasetWorkflow() {
   const { t } = useI18n()
   const dataset = ref<DatasetUploadResponse | null>(null)
+  const datasets = ref<DatasetInfo[]>([])
+  const datasetsLoading = ref(false)
+  const datasetsError = ref<string | null>(null)
   const uploadError = ref<string | null>(null)
   const uploading = ref(false)
 
@@ -49,6 +52,7 @@ export function useDatasetWorkflow() {
     uploadError.value = null
     try {
       dataset.value = await uploadDataset(file)
+      await fetchDatasets()
       return dataset.value
     } catch (err) {
       uploadError.value = err instanceof Error ? err.message : t('alerts.uploadFailed')
@@ -65,6 +69,20 @@ export function useDatasetWorkflow() {
     return info
   }
 
+  async function fetchDatasets(limit = 100) {
+    datasetsLoading.value = true
+    datasetsError.value = null
+    try {
+      datasets.value = await listDatasets(limit)
+      return datasets.value
+    } catch (err) {
+      datasetsError.value = err instanceof Error ? err.message : t('alerts.loadFailed')
+      throw err
+    } finally {
+      datasetsLoading.value = false
+    }
+  }
+
   function setDataset(value: DatasetUploadResponse | DatasetInfo | null) {
     dataset.value = value
   }
@@ -72,15 +90,21 @@ export function useDatasetWorkflow() {
   function clear() {
     dataset.value = null
     uploadError.value = null
+    datasetsError.value = null
+    datasets.value = []
   }
 
   return {
     dataset,
+    datasets,
+    datasetsLoading,
+    datasetsError,
     uploading,
     uploadError,
     qualityIssues,
     upload,
     loadById,
+    fetchDatasets,
     setDataset,
     clear,
   }

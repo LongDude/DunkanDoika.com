@@ -65,6 +65,21 @@
   flex: 1;
 }
 
+.dataset-source-row {
+  align-items: end;
+}
+
+.dataset-picker {
+  display: grid;
+  gap: 8px;
+  min-width: 360px;
+}
+
+.dataset-picker label {
+  display: grid;
+  gap: 6px;
+}
+
 .dataset-grid {
   margin-top: 12px;
   display: grid;
@@ -397,6 +412,11 @@ summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .dataset-picker {
+    min-width: 280px;
+    flex: 1;
+  }
+
   .action-footer {
     left: 16px;
     right: 16px;
@@ -416,6 +436,15 @@ summary {
   .adv-grid,
   .history-filters {
     grid-template-columns: 1fr;
+  }
+
+  .upload-row.dataset-source-row {
+    flex-direction: column !important;
+    align-items: stretch;
+  }
+
+  .dataset-picker {
+    min-width: auto;
   }
 
   .presets-table {

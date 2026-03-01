@@ -3,8 +3,12 @@
     <section v-if="currentScreen === 'dataset'" class="screen-stack">
       <DatasetQualityPanel
         :dataset="workspace.datasetFlow.dataset.value"
+        :datasets="workspace.datasetFlow.datasets.value"
+        :datasets-loading="workspace.datasetFlow.datasetsLoading.value"
         :issues="workspace.datasetFlow.qualityIssues.value"
         @file-change="handleFileInput"
+        @refresh-datasets="workspace.refreshDatasetList"
+        @select-dataset="handleSelectDataset"
         @refresh="workspace.refreshScenarioList"
       />
     </section>
@@ -233,6 +237,7 @@ const kpiSnapshot = computed<ForecastKpiSnapshot | null>(() => {
 })
 
 onMounted(() => {
+  void workspace.refreshDatasetList()
   void workspace.editor.refreshUserPresets().catch(() => {
     // user-facing message is shown only when action is explicitly requested
   })
@@ -255,6 +260,17 @@ async function handleFileInput(event: Event) {
   await workspace.onFileInput(event)
   if (workspace.datasetFlow.dataset.value) {
     await router.push('/workspace/scenarios')
+  }
+}
+
+async function handleSelectDataset(datasetId: string) {
+  try {
+    await workspace.selectDatasetById(datasetId)
+    if (workspace.datasetFlow.dataset.value) {
+      await router.push('/workspace/scenarios')
+    }
+  } catch {
+    // user-facing error is handled in workspace layer
   }
 }
 

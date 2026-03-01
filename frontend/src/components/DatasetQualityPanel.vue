@@ -1,12 +1,38 @@
 <template>
   <section class="card">
     <h2>{{ t('screen.dataset') }}</h2>
-    <div class="upload-row">
+    <div class="upload-row dataset-source-row">
       <label class="upload-label">
         <span>{{ t('dataset.uploadLabel') }}</span>
         <input type="file" accept=".csv" @change="$emit('file-change', $event)" />
       </label>
-      <button @click="$emit('refresh')" :disabled="!dataset">{{ t('buttons.refresh') }}</button>
+
+      <div class="dataset-picker">
+        <label>
+          <span>{{ t('dataset.selectExisting') }}</span>
+          <select v-model="selectedDatasetId" :disabled="datasetsLoading || datasets.length === 0">
+            <option value="">{{ t('dataset.selectExistingPlaceholder') }}</option>
+            <option v-for="item in datasets" :key="item.dataset_id" :value="item.dataset_id">
+              {{ item.original_filename }} - {{ formatDate(item.created_at, localeAsApp) }}
+            </option>
+          </select>
+        </label>
+        <div class="row">
+          <button class="btn btn-ghost" @click="$emit('refresh-datasets')" :disabled="datasetsLoading">
+            {{ t('dataset.refreshList') }}
+          </button>
+          <button
+            class="btn btn-secondary"
+            :disabled="!selectedDatasetId || datasetsLoading"
+            @click="onUseSelectedDataset"
+          >
+            {{ t('dataset.useSelected') }}
+          </button>
+          <button class="btn btn-secondary" @click="$emit('refresh')" :disabled="!dataset">
+            {{ t('buttons.refresh') }}
+          </button>
+        </div>
+      </div>
     </div>
 
     <div v-if="dataset" class="dataset-grid">
@@ -55,25 +81,38 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { AppLocale } from '../i18n/messages'
-import type { DatasetQualityIssue, DatasetUploadResponse } from '../types/forecast'
+import type { DatasetInfo, DatasetQualityIssue, DatasetUploadResponse } from '../types/forecast'
 import { formatDate, formatNumber } from '../utils/format'
 
 const props = defineProps<{
   dataset: DatasetUploadResponse | null
+  datasets: DatasetInfo[]
+  datasetsLoading: boolean
   issues: DatasetQualityIssue[]
 }>()
 
-defineEmits<{
+const emit = defineEmits<{
   (e: 'file-change', event: Event): void
   (e: 'refresh'): void
+  (e: 'refresh-datasets'): void
+  (e: 'select-dataset', datasetId: string): void
 }>()
 
 const { t, locale } = useI18n()
+const selectedDatasetId = ref('')
 
 const localeAsApp = computed(() => (locale.value === 'ru' ? 'ru' : 'en') as AppLocale)
+
+watch(
+  () => props.dataset?.dataset_id,
+  value => {
+    selectedDatasetId.value = value ?? ''
+  },
+  { immediate: true },
+)
 
 const topStatuses = computed(() => {
   if (!props.dataset) return []
@@ -81,4 +120,9 @@ const topStatuses = computed(() => {
     .sort((a, b) => b[1] - a[1])
     .slice(0, 8)
 })
+
+function onUseSelectedDataset() {
+  if (!selectedDatasetId.value) return
+  emit('select-dataset', selectedDatasetId.value)
+}
 </script>

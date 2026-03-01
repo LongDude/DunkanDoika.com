@@ -120,6 +120,13 @@ export async function getDatasetInfo(datasetId: string): Promise<DatasetInfo> {
   return unwrapJson<DatasetInfo>(resp)
 }
 
+export async function listDatasets(limit = 100): Promise<DatasetInfo[]> {
+  const url = resolveForecastUrl('/datasets')
+  url.searchParams.set('limit', String(limit))
+  const resp = await fetch(url)
+  return unwrapJson<DatasetInfo[]>(resp)
+}
+
 export async function createForecastJob(params: ScenarioParams): Promise<CreateForecastJobResponse> {
   const resp = await fetch(resolveForecastUrl('/forecast/jobs'), {
     method: 'POST',
