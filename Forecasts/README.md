@@ -1,5 +1,8 @@
 # Прогнозы на 3 года
 ForecastData - csv-файлы с данными прогнозов для каждого из предоставленных датасетов соотвественно.
+- [Прогноз для датасета 1](./ForecastsData/dim_median_ds1_empirical_auto_counter_runs100.csv)
+- [Прогноз для датасета 2](./ForecastsData/dim_median_ds2_empirical_auto_counter_runs100.csv)
+- [Прогноз для датасета 3](./ForecastsData/dim_median_ds3_empirical_auto_counter_runs100.csv)
 
 В каждом прогнозе - средние дни доения дойного стада по месяцам, начиная с 01.03.2026
 На графике "динамика стада" статистика по стаду - 4 параметра:
