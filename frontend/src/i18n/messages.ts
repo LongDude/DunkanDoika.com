@@ -1,7 +1,7 @@
 ﻿export const messages = {
   en: {
     app: {
-      title: 'Dairy Forecast Workspace',
+      title: 'DunkanDoika.com',
       subtitle: 'Plan herd dynamics from data to decision',
     },
     language: {
@@ -368,7 +368,7 @@
   },
   ru: {
     app: {
-      title: 'Прогноз стада',
+      title: 'DunkanDoika.com',
       subtitle: 'От загрузки данных до решения за один поток работы',
     },
     language: {
