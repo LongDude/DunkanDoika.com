@@ -26,7 +26,10 @@
         {{ t('history.dateTo') }}
         <input type="date" v-model="history.dateTo.value" />
       </label>
-      <button :disabled="history.loading.value" @click="$emit('refresh')">{{ t('buttons.refresh') }}</button>
+      <label>
+        {{  }}
+        <button :disabled="history.loading.value" @click="$emit('refresh')">{{ t('buttons.refresh') }}</button>
+      </label>
     </div>
 
     <div class="history-bulk-actions">

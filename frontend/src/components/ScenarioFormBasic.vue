@@ -28,16 +28,19 @@
       <label>
         {{ t('scenario.horizonMonths') }}
         <input type="number" min="1" max="120" v-model.number="editor.form.value.horizon_months" />
+        <small class="muted">{{  }}</small>
         <small v-if="fieldIssue('horizon_months')" class="field-error">{{ fieldIssue('horizon_months') }}</small>
       </label>
       <label>
         {{ t('scenario.futureDate') }}
         <input type="date" :lang="dateLang" v-model="editor.form.value.future_date" />
+        <small class="muted">{{  }}</small>
         <small v-if="fieldIssue('future_date')" class="field-error">{{ fieldIssue('future_date') }}</small>
       </label>
       <label>
         {{ t('scenario.mcRuns') }}
         <input type="number" min="1" max="30000" v-model.number="editor.form.value.mc_runs" />
+        <small class="muted">{{  }}</small>
         <small v-if="fieldIssue('mc_runs')" class="field-error">{{ fieldIssue('mc_runs') }}</small>
       </label>
       <label>
