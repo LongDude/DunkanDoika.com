@@ -67,6 +67,8 @@
 
 .dataset-source-row {
   align-items: end;
+  display: flex;
+  flex-direction: column;
 }
 
 .dataset-picker {
