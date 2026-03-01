@@ -378,6 +378,39 @@ code {
   flex-wrap: wrap;
 }
 
+.presets-table {
+  table-layout: fixed;
+}
+
+.presets-col-check {
+  width: 44px;
+}
+
+.presets-col-name {
+  width: 200px;
+}
+
+.presets-col-updated {
+  width: 300px;
+}
+
+.presets-col-actions {
+  width: auto;
+}
+
+.presets-actions-cell {
+  vertical-align: middle;
+}
+
+.preset-actions {
+  align-items: center;
+}
+
+.preset-actions button {
+  min-height: 36px;
+  padding: 6px 12px;
+}
+
 .history-filters {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -636,6 +669,27 @@ summary {
 
 .auth-switch-link {
   margin-top: 2px;
+}
+
+.password-hints {
+  display: grid;
+  gap: 4px;
+}
+
+.password-hints ul {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 2px;
+}
+
+.password-hints li {
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.password-hints li.ok {
+  color: var(--accent);
 }
 
 .linkish {

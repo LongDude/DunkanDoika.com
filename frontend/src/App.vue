@@ -8,6 +8,7 @@
 
   <AuthGate
     v-else-if="!auth.isAuthenticated.value"
+    :register-success-tick="registerSuccessTick"
     :submitting="auth.submitting.value"
     :error="auth.lastError.value"
     :notice="notice"
@@ -35,6 +36,7 @@ import type { SsoLoginRequest, SsoOauthProvider, SsoPasswordResetRequest, SsoReg
 const { t } = useI18n()
 const auth = useAuth()
 const notice = ref<string | null>(null)
+const registerSuccessTick = ref(0)
 const isAuthScreen = computed(() => auth.initializing.value || !auth.isAuthenticated.value)
 
 function setAuthScreenClass(enabled: boolean) {
@@ -80,6 +82,8 @@ async function handleRegister(payload: SsoRegisterRequest) {
   notice.value = null
   try {
     await auth.register(payload)
+    registerSuccessTick.value += 1
+    notice.value = t('auth.registrationRequiresEmailConfirm')
   } catch {
     // user-facing error is stored in auth.lastError
   }

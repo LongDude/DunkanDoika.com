@@ -60,7 +60,19 @@
           {{ t('auth.password') }}
           <input v-model="registerForm.password" type="password" required minlength="8" autocomplete="new-password" />
         </label>
-        <button class="primary" type="submit" :disabled="submitting">{{ t('auth.registerAction') }}</button>
+        <div class="password-hints">
+          <p class="muted">{{ t('auth.passwordPolicyTitle') }}</p>
+          <ul>
+            <li :class="{ ok: passwordChecks.minLength }">{{ t('auth.passwordPolicyLength') }}</li>
+            <li :class="{ ok: passwordChecks.hasLower }">{{ t('auth.passwordPolicyLower') }}</li>
+            <li :class="{ ok: passwordChecks.hasUpper }">{{ t('auth.passwordPolicyUpper') }}</li>
+            <li :class="{ ok: passwordChecks.hasSpecial }">{{ t('auth.passwordPolicySpecial') }}</li>
+          </ul>
+        </div>
+        <p v-if="registerValidationError" class="field-error">{{ registerValidationError }}</p>
+        <button class="primary" type="submit" :disabled="submitting || !isRegisterPasswordValid">
+          {{ t('auth.registerAction') }}
+        </button>
         <button type="button" class="linkish auth-link-centered auth-switch-link" :disabled="submitting" @click="mode = 'login'">
           {{ t('auth.loginTab') }}
         </button>
@@ -81,17 +93,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import LanguageSwitcher from './LanguageSwitcher.vue'
 import type { SsoLoginRequest, SsoOauthProvider, SsoPasswordResetRequest, SsoRegisterRequest } from '../types/auth'
 
 type AuthMode = 'login' | 'register' | 'forgot'
 
-defineProps<{
+const props = defineProps<{
   submitting: boolean
   error: string | null
   notice: string | null
+  registerSuccessTick?: number
 }>()
 
 const emit = defineEmits<{
@@ -114,15 +127,58 @@ const registerForm = ref<SsoRegisterRequest>({
   last_name: '',
   password: '',
 })
+const registerValidationError = ref<string | null>(null)
 const forgotForm = ref<SsoPasswordResetRequest>({
   email: '',
 })
+
+const passwordChecks = computed(() => {
+  const value = registerForm.value.password
+  return {
+    minLength: value.length >= 8,
+    hasLower: /[a-z]/.test(value),
+    hasUpper: /[A-Z]/.test(value),
+    hasSpecial: /[^A-Za-z0-9\s]/.test(value),
+  }
+})
+
+const isRegisterPasswordValid = computed(
+  () =>
+    passwordChecks.value.minLength &&
+    passwordChecks.value.hasLower &&
+    passwordChecks.value.hasUpper &&
+    passwordChecks.value.hasSpecial,
+)
+
+watch(
+  () => registerForm.value.password,
+  () => {
+    registerValidationError.value = null
+  },
+)
+
+watch(
+  () => props.registerSuccessTick,
+  (next, prev) => {
+    if (typeof next === 'number' && next !== prev) {
+      mode.value = 'login'
+      registerValidationError.value = null
+      loginForm.value.login = registerForm.value.email
+      loginForm.value.password = ''
+    }
+  },
+)
 
 function onLoginSubmit() {
   emit('login', { ...loginForm.value })
 }
 
 function onRegisterSubmit() {
+  if (!isRegisterPasswordValid.value) {
+    registerValidationError.value = t('auth.passwordPolicyError')
+    return
+  }
+  registerValidationError.value = null
   emit('register', { ...registerForm.value })
 }
 

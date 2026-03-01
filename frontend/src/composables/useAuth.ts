@@ -27,6 +27,7 @@ const initializing = ref(false)
 const submitting = ref(false)
 const lastError = ref<string | null>(null)
 const initialized = ref(false)
+const EMAIL_CONFIRM_REQUIRED_ERROR = 'Email is not confirmed. Please confirm your email before signing in.'
 
 function readStoredToken(): string | null {
   try {
@@ -76,7 +77,13 @@ async function authenticateByToken(token: string): Promise<boolean> {
   accessToken.value = token
   persistToken(token)
   try {
-    user.value = await ssoAuthenticate(token)
+    const authUser = await ssoAuthenticate(token)
+    if (!authUser.email_confirmed) {
+      clearSessionState()
+      lastError.value = EMAIL_CONFIRM_REQUIRED_ERROR
+      return false
+    }
+    user.value = authUser
     return true
   } catch {
     clearSessionState()
@@ -129,11 +136,13 @@ export function useAuth() {
       const token = await ssoLogin(payload)
       const ok = await authenticateByToken(token.access_token)
       if (!ok) {
-        throw new Error('Authentication failed after login')
+        throw new Error(lastError.value || 'Authentication failed after login')
       }
     } catch (err) {
       clearSessionState()
-      lastError.value = err instanceof Error ? err.message : 'Login failed'
+      if (!lastError.value) {
+        lastError.value = err instanceof Error ? err.message : 'Login failed'
+      }
       throw err
     } finally {
       submitting.value = false
@@ -144,11 +153,7 @@ export function useAuth() {
     submitting.value = true
     lastError.value = null
     try {
-      await ssoRegister(payload)
-      await login({
-        login: payload.email,
-        password: payload.password,
-      })
+      return await ssoRegister(payload)
     } catch (err) {
       lastError.value = err instanceof Error ? err.message : 'Registration failed'
       throw err
