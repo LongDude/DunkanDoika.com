@@ -58,6 +58,7 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { AppLocale } from '../i18n/messages'
 import type { ScenarioEditorStore } from '../composables/useScenarioEditor'
+import { useToast } from '../composables/useToast'
 import { formatDate } from '../utils/format'
 
 const props = defineProps<{
@@ -65,6 +66,7 @@ const props = defineProps<{
 }>()
 
 const { t, locale } = useI18n()
+const toast = useToast()
 const newPresetName = ref('')
 const selectedIds = ref<string[]>([])
 
@@ -99,7 +101,7 @@ async function createPreset() {
     newPresetName.value = ''
     selectedIds.value = []
   } catch (err) {
-    alert(`${t('alerts.saveFailed')}: ${err instanceof Error ? err.message : ''}`)
+    toast.notify('error', `${t('alerts.saveFailed')}: ${err instanceof Error ? err.message : ''}`)
   }
 }
 
@@ -113,7 +115,7 @@ async function updatePresetParams(presetId: string) {
   try {
     await props.editor.updateUserPresetById(presetId, { replaceParams: true })
   } catch (err) {
-    alert(`${t('alerts.saveFailed')}: ${err instanceof Error ? err.message : ''}`)
+    toast.notify('error', `${t('alerts.saveFailed')}: ${err instanceof Error ? err.message : ''}`)
   }
 }
 
@@ -123,7 +125,7 @@ async function renamePreset(presetId: string, currentName: string) {
   try {
     await props.editor.updateUserPresetById(presetId, { name: value.trim() })
   } catch (err) {
-    alert(`${t('alerts.saveFailed')}: ${err instanceof Error ? err.message : ''}`)
+    toast.notify('error', `${t('alerts.saveFailed')}: ${err instanceof Error ? err.message : ''}`)
   }
 }
 
@@ -132,7 +134,7 @@ async function deleteOne(presetId: string) {
     await props.editor.deleteUserPresetById(presetId)
     selectedIds.value = selectedIds.value.filter(x => x !== presetId)
   } catch (err) {
-    alert(`${t('alerts.saveFailed')}: ${err instanceof Error ? err.message : ''}`)
+    toast.notify('error', `${t('alerts.saveFailed')}: ${err instanceof Error ? err.message : ''}`)
   }
 }
 
@@ -141,7 +143,8 @@ async function bulkDelete() {
     const response = await props.editor.bulkDeleteUserPresetByIds(selectedIds.value)
     selectedIds.value = []
     if (response.skipped.length > 0) {
-      alert(
+      toast.notify(
+        'info',
         t('presets.bulkDeleteSummary', {
           deleted: response.deleted_ids.length,
           skipped: response.skipped.length,
@@ -149,7 +152,7 @@ async function bulkDelete() {
       )
     }
   } catch (err) {
-    alert(`${t('alerts.saveFailed')}: ${err instanceof Error ? err.message : ''}`)
+    toast.notify('error', `${t('alerts.saveFailed')}: ${err instanceof Error ? err.message : ''}`)
   }
 }
 </script>

@@ -5,6 +5,7 @@ import { useDatasetWorkflow } from './useDatasetWorkflow'
 import { useForecastRun } from './useForecastRun'
 import { useHistory } from './useHistory'
 import { useScenarioEditor } from './useScenarioEditor'
+import { useToast } from './useToast'
 import type { DisabledReason, ScenarioPreset } from '../types/forecast'
 
 function disabled(disabledValue: boolean, reason: string | null): DisabledReason {
@@ -13,6 +14,7 @@ function disabled(disabledValue: boolean, reason: string | null): DisabledReason
 
 export function useForecastWorkspace() {
   const { t } = useI18n()
+  const toast = useToast()
 
   const datasetFlow = useDatasetWorkflow()
   const datasetId = computed(() => datasetFlow.dataset.value?.dataset_id ?? null)
@@ -65,7 +67,7 @@ export function useForecastWorkspace() {
       comparison.clear()
       runLayer.reset()
     } catch (err) {
-      alert(`${t('alerts.uploadFailed')}: ${err instanceof Error ? err.message : ''}`)
+      toast.notify('error', `${t('alerts.uploadFailed')}: ${err instanceof Error ? err.message : ''}`)
     }
   }
 
@@ -74,7 +76,7 @@ export function useForecastWorkspace() {
       await editor.refreshScenarioList()
       await editor.refreshUserPresets()
     } catch (err) {
-      alert(`${t('alerts.loadFailed')}: ${err instanceof Error ? err.message : ''}`)
+      toast.notify('error', `${t('alerts.loadFailed')}: ${err instanceof Error ? err.message : ''}`)
     }
   }
 
@@ -82,7 +84,7 @@ export function useForecastWorkspace() {
     try {
       await history.fetchPage()
     } catch (err) {
-      alert(`${t('alerts.loadFailed')}: ${err instanceof Error ? err.message : ''}`)
+      toast.notify('error', `${t('alerts.loadFailed')}: ${err instanceof Error ? err.message : ''}`)
     }
   }
 
@@ -92,7 +94,7 @@ export function useForecastWorkspace() {
       const params = editor.buildParams()
       await runLayer.runWithParams(params)
     } catch (err) {
-      alert(`${t('alerts.forecastFailed')}: ${err instanceof Error ? err.message : ''}`)
+      toast.notify('error', `${t('alerts.forecastFailed')}: ${err instanceof Error ? err.message : ''}`)
       return
     }
     try {
@@ -112,7 +114,7 @@ export function useForecastWorkspace() {
     try {
       await editor.saveCurrentScenario()
     } catch (err) {
-      alert(`${t('alerts.saveFailed')}: ${err instanceof Error ? err.message : ''}`)
+      toast.notify('error', `${t('alerts.saveFailed')}: ${err instanceof Error ? err.message : ''}`)
     }
   }
 
@@ -120,7 +122,7 @@ export function useForecastWorkspace() {
     try {
       await editor.loadScenarioById(id)
     } catch (err) {
-      alert(`${t('alerts.loadFailed')}: ${err instanceof Error ? err.message : ''}`)
+      toast.notify('error', `${t('alerts.loadFailed')}: ${err instanceof Error ? err.message : ''}`)
     }
   }
 
@@ -129,7 +131,7 @@ export function useForecastWorkspace() {
     try {
       await runLayer.runSavedScenarioById(id)
     } catch (err) {
-      alert(`${t('alerts.runFailed')}: ${err instanceof Error ? err.message : ''}`)
+      toast.notify('error', `${t('alerts.runFailed')}: ${err instanceof Error ? err.message : ''}`)
       return
     }
     try {
@@ -151,20 +153,20 @@ export function useForecastWorkspace() {
       editor.scenarioName.value = `${t('scenario.scenarioName')} #${detail.job_id.slice(0, 8)}`
       editor.markBaseline()
     } catch (err) {
-      alert(`${t('alerts.loadFailed')}: ${err instanceof Error ? err.message : ''}`)
+      toast.notify('error', `${t('alerts.loadFailed')}: ${err instanceof Error ? err.message : ''}`)
     }
   }
 
   async function addHistoryJobToComparison(jobId: string) {
     try {
       const result = await history.getResult(jobId)
-      const label = `Job ${jobId.slice(0, 8)}`
+      const label = t('history.jobLabel', { id: jobId.slice(0, 8) })
       const res = comparison.addScenario(label, result)
       if (!res.ok && res.reason) {
-        alert(res.reason)
+        toast.notify('warning', res.reason)
       }
     } catch (err) {
-      alert(`${t('alerts.runFailed')}: ${err instanceof Error ? err.message : ''}`)
+      toast.notify('error', `${t('alerts.runFailed')}: ${err instanceof Error ? err.message : ''}`)
     }
   }
 
@@ -174,7 +176,7 @@ export function useForecastWorkspace() {
 
     const availableSlots = Math.max(0, comparison.maxItems - comparison.items.value.length)
     if (availableSlots === 0) {
-      alert(t('disabledReasons.compareLimit'))
+      toast.notify('warning', t('disabledReasons.compareLimit'))
       return
     }
 
@@ -185,14 +187,15 @@ export function useForecastWorkspace() {
     for (const id of toLoad) {
       try {
         const result = await history.getResult(id)
-        comparison.addScenario(`Job ${id.slice(0, 8)}`, result)
+        comparison.addScenario(t('history.jobLabel', { id: id.slice(0, 8) }), result)
       } catch {
         failedCount += 1
       }
     }
 
     if (skippedCount > 0 || failedCount > 0) {
-      alert(
+      toast.notify(
+        'info',
         t('history.bulkCompareSummary', {
           added: toLoad.length - failedCount,
           skipped: skippedCount + failedCount,
@@ -205,7 +208,7 @@ export function useForecastWorkspace() {
     try {
       await history.deleteOne(jobId)
     } catch (err) {
-      alert(`${t('alerts.saveFailed')}: ${err instanceof Error ? err.message : ''}`)
+      toast.notify('error', `${t('alerts.saveFailed')}: ${err instanceof Error ? err.message : ''}`)
     }
   }
 
@@ -213,7 +216,8 @@ export function useForecastWorkspace() {
     try {
       const response = await history.deleteSelected()
       if (response.skipped.length > 0) {
-        alert(
+        toast.notify(
+          'info',
           t('history.bulkDeleteSummary', {
             deleted: response.deleted_ids.length,
             skipped: response.skipped.length,
@@ -221,7 +225,7 @@ export function useForecastWorkspace() {
         )
       }
     } catch (err) {
-      alert(`${t('alerts.saveFailed')}: ${err instanceof Error ? err.message : ''}`)
+      toast.notify('error', `${t('alerts.saveFailed')}: ${err instanceof Error ? err.message : ''}`)
     }
   }
 
@@ -230,7 +234,7 @@ export function useForecastWorkspace() {
     try {
       await runLayer.exportCsv()
     } catch (err) {
-      alert(`${t('alerts.exportFailed')}: ${err instanceof Error ? err.message : ''}`)
+      toast.notify('error', `${t('alerts.exportFailed')}: ${err instanceof Error ? err.message : ''}`)
     }
   }
 
@@ -239,7 +243,7 @@ export function useForecastWorkspace() {
     try {
       await runLayer.exportXlsx()
     } catch (err) {
-      alert(`${t('alerts.exportFailed')}: ${err instanceof Error ? err.message : ''}`)
+      toast.notify('error', `${t('alerts.exportFailed')}: ${err instanceof Error ? err.message : ''}`)
     }
   }
 
@@ -247,7 +251,7 @@ export function useForecastWorkspace() {
     if (!runLayer.result.value) return
     const res = comparison.addScenario(editor.scenarioName.value, runLayer.result.value)
     if (!res.ok && res.reason) {
-      alert(res.reason)
+      toast.notify('warning', res.reason)
     }
   }
 

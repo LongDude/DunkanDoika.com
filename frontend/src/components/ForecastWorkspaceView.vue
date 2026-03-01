@@ -1,11 +1,6 @@
 <template>
-  <AppShell
-    :active-screen="activeScreen"
-    :user-name="userName ?? null"
-    @change-screen="activeScreen = $event"
-    @logout="$emit('logout')"
-  >
-    <section v-if="activeScreen === 'dataset'" class="screen-stack">
+  <AppShell :user-name="userName ?? null" @logout="$emit('logout')">
+    <section v-if="currentScreen === 'dataset'" class="screen-stack">
       <DatasetQualityPanel
         :dataset="workspace.datasetFlow.dataset.value"
         :issues="workspace.datasetFlow.qualityIssues.value"
@@ -14,7 +9,7 @@
       />
     </section>
 
-    <section v-if="activeScreen === 'scenarios'" class="screen-stack">
+    <section v-if="currentScreen === 'scenarios'" class="screen-stack">
       <ScenarioFormBasic
         :editor="workspace.editor"
         @apply-preset="workspace.editor.applyPreset"
@@ -25,7 +20,7 @@
       <ScenarioFormAdvanced :editor="workspace.editor" />
     </section>
 
-    <section v-if="activeScreen === 'forecast'" class="screen-stack">
+    <section v-if="currentScreen === 'forecast'" class="screen-stack">
       <section class="card run-status-card">
         <h2>{{ t('screen.forecast') }}</h2>
         <p>{{ runStatusLabel }}</p>
@@ -83,7 +78,7 @@
       </section>
     </section>
 
-    <section v-if="activeScreen === 'comparison'" class="screen-stack">
+    <section v-if="currentScreen === 'comparison'" class="screen-stack">
       <ComparisonTable
         :base-id="workspace.comparison.baseId.value"
         :base-item="workspace.comparison.baseItem.value"
@@ -98,7 +93,7 @@
       />
     </section>
 
-    <section v-if="activeScreen === 'history'" class="screen-stack">
+    <section v-if="currentScreen === 'history'" class="screen-stack">
       <HistoryJobsPanel
         :history="workspace.history"
         @refresh="handleHistoryRefresh"
@@ -112,7 +107,7 @@
       />
     </section>
 
-    <section v-if="activeScreen === 'export'" class="screen-stack">
+    <section v-if="currentScreen === 'export'" class="screen-stack">
       <section class="card">
         <h2>{{ t('export.title') }}</h2>
         <p>{{ t('export.hint') }}</p>
@@ -157,8 +152,15 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import {
+  onBeforeRouteLeave,
+  onBeforeRouteUpdate,
+  useRoute,
+  useRouter,
+  type RouteLocationNormalizedLoaded,
+} from 'vue-router'
 import AppShell from './AppShell.vue'
 import DatasetQualityPanel from './DatasetQualityPanel.vue'
 import ScenarioFormBasic from './ScenarioFormBasic.vue'
@@ -174,8 +176,7 @@ import { useForecastWorkspace } from '../composables/useForecastWorkspace'
 import { formatDate, formatNumber } from '../utils/format'
 import type { AppLocale } from '../i18n/messages'
 import type { ForecastKpiSnapshot } from '../types/forecast'
-
-type ScreenId = 'dataset' | 'scenarios' | 'forecast' | 'comparison' | 'history' | 'export'
+import type { RouteScreenId } from '../types/ui'
 
 defineProps<{
   userName?: string | null
@@ -187,7 +188,12 @@ defineEmits<{
 
 const { t, locale } = useI18n()
 const workspace = useForecastWorkspace()
-const activeScreen = ref<ScreenId>('dataset')
+const route = useRoute()
+const router = useRouter()
+
+const currentScreen = computed<RouteScreenId>(() => {
+  return resolveScreenFromRoute(route)
+})
 
 const currentLocale = computed(() => (locale.value === 'ru' ? 'ru' : 'en') as AppLocale)
 
@@ -227,31 +233,43 @@ const kpiSnapshot = computed<ForecastKpiSnapshot | null>(() => {
 })
 
 onMounted(() => {
-  void workspace.refreshHistory()
   void workspace.editor.refreshUserPresets().catch(() => {
     // user-facing message is shown only when action is explicitly requested
   })
 })
 
+watch(
+  currentScreen,
+  screen => {
+    if (screen === 'history') {
+      void workspace.refreshHistory()
+    }
+  },
+  { immediate: true },
+)
+
+onBeforeRouteUpdate((to, from) => confirmRouteTransition(to, from))
+onBeforeRouteLeave((to, from) => confirmRouteTransition(to, from))
+
 async function handleFileInput(event: Event) {
   await workspace.onFileInput(event)
   if (workspace.datasetFlow.dataset.value) {
-    activeScreen.value = 'scenarios'
+    await router.push('/workspace/scenarios')
   }
 }
 
 async function handleRunForecast() {
-  activeScreen.value = 'forecast'
+  await router.push('/workspace/forecast')
   await workspace.runForecast()
 }
 
 async function handleFastRun() {
-  activeScreen.value = 'forecast'
+  await router.push('/workspace/forecast')
   await workspace.fastRun('baseline')
 }
 
 async function handleRunSavedScenario(id: string) {
-  activeScreen.value = 'forecast'
+  await router.push('/workspace/forecast')
   await workspace.runSavedScenarioById(id)
 }
 
@@ -261,7 +279,7 @@ async function handleHistoryRefresh() {
 }
 
 async function handleLoadFromHistory(jobId: string) {
-  activeScreen.value = 'scenarios'
+  await router.push('/workspace/scenarios')
   await workspace.loadScenarioFromHistory(jobId)
 }
 
@@ -275,5 +293,51 @@ async function handleHistoryNextPage() {
   if (workspace.history.page.value >= workspace.history.totalPages.value) return
   workspace.history.page.value += 1
   await workspace.refreshHistory()
+}
+
+function resolveScreenFromRoute(target: RouteLocationNormalizedLoaded): RouteScreenId {
+  const raw = target.params.screen
+  const screen = Array.isArray(raw) ? raw[0] : raw
+  if (
+    screen === 'dataset' ||
+    screen === 'scenarios' ||
+    screen === 'forecast' ||
+    screen === 'comparison' ||
+    screen === 'history' ||
+    screen === 'export'
+  ) {
+    return screen
+  }
+  return 'dataset'
+}
+
+function getLeaveWarningMessage(
+  fromScreen: RouteScreenId,
+  toScreen: RouteScreenId | null,
+): string | null {
+  const warnings: string[] = []
+
+  if (fromScreen === 'scenarios' && toScreen !== 'scenarios' && workspace.editor.isDirty.value) {
+    warnings.push(t('guards.leaveDirtyScenario'))
+  }
+
+  if (fromScreen === 'forecast' && toScreen !== 'forecast' && workspace.runLayer.running.value) {
+    warnings.push(t('guards.leaveRunningForecast'))
+  }
+
+  if (warnings.length === 0) return null
+  return warnings.join('\n\n')
+}
+
+function confirmRouteTransition(
+  to: RouteLocationNormalizedLoaded,
+  from: RouteLocationNormalizedLoaded,
+): boolean {
+  const fromScreen = resolveScreenFromRoute(from)
+  const toScreen = to.name === 'workspace' ? resolveScreenFromRoute(to) : null
+  const warningMessage = getLeaveWarningMessage(fromScreen, toScreen)
+  if (!warningMessage) return true
+  if (typeof window === 'undefined') return true
+  return window.confirm(warningMessage)
 }
 </script>

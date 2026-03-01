@@ -23,7 +23,7 @@
           {{ t('auth.password') }}
           <input v-model="loginForm.password" type="password" required minlength="8" autocomplete="current-password" />
         </label>
-        <button type="button" class="linkish auth-link-centered auth-forgot-link" :disabled="submitting" @click="mode = 'forgot'">
+        <button type="button" class="linkish auth-link-centered auth-forgot-link" :disabled="submitting" @click="$emit('change-mode', 'forgot')">
           {{ t('auth.forgotPasswordAction') }}
         </button>
         <button class="primary" type="submit" :disabled="submitting">{{ t('auth.loginAction') }}</button>
@@ -38,7 +38,7 @@
             {{ t('auth.oauthYandex') }}
           </button>
         </div>
-        <button type="button" class="linkish auth-link-centered auth-switch-link" :disabled="submitting" @click="mode = 'register'">
+        <button type="button" class="linkish auth-link-centered auth-switch-link" :disabled="submitting" @click="$emit('change-mode', 'register')">
           {{ t('auth.registerTab') }}
         </button>
       </form>
@@ -73,7 +73,7 @@
         <button class="primary" type="submit" :disabled="submitting || !isRegisterPasswordValid">
           {{ t('auth.registerAction') }}
         </button>
-        <button type="button" class="linkish auth-link-centered auth-switch-link" :disabled="submitting" @click="mode = 'login'">
+        <button type="button" class="linkish auth-link-centered auth-switch-link" :disabled="submitting" @click="$emit('change-mode', 'login')">
           {{ t('auth.loginTab') }}
         </button>
       </form>
@@ -84,7 +84,7 @@
           <input v-model.trim="forgotForm.email" type="email" required autocomplete="email" />
         </label>
         <button class="primary" type="submit" :disabled="submitting">{{ t('auth.forgotPasswordAction') }}</button>
-        <button type="button" class="linkish auth-link-centered auth-switch-link" :disabled="submitting" @click="mode = 'login'">
+        <button type="button" class="linkish auth-link-centered auth-switch-link" :disabled="submitting" @click="$emit('change-mode', 'login')">
           {{ t('auth.backToLoginAction') }}
         </button>
       </form>
@@ -98,9 +98,8 @@ import { useI18n } from 'vue-i18n'
 import LanguageSwitcher from './LanguageSwitcher.vue'
 import type { SsoLoginRequest, SsoOauthProvider, SsoPasswordResetRequest, SsoRegisterRequest } from '../types/auth'
 
-type AuthMode = 'login' | 'register' | 'forgot'
-
 const props = defineProps<{
+  mode: 'login' | 'register' | 'forgot'
   submitting: boolean
   error: string | null
   notice: string | null
@@ -112,11 +111,11 @@ const emit = defineEmits<{
   (e: 'register', payload: SsoRegisterRequest): void
   (e: 'forgot-password', payload: SsoPasswordResetRequest): void
   (e: 'oauth-login', provider: SsoOauthProvider): void
+  (e: 'change-mode', mode: 'login' | 'register' | 'forgot'): void
 }>()
 
 const { t } = useI18n()
 
-const mode = ref<AuthMode>('login')
 const loginForm = ref<SsoLoginRequest>({
   login: '',
   password: '',
@@ -161,10 +160,10 @@ watch(
   () => props.registerSuccessTick,
   (next, prev) => {
     if (typeof next === 'number' && next !== prev) {
-      mode.value = 'login'
       registerValidationError.value = null
       loginForm.value.login = registerForm.value.email
       loginForm.value.password = ''
+      emit('change-mode', 'login')
     }
   },
 )

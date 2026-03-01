@@ -1,0 +1,134 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap');
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(circle at top right, #e5f2ef 0%, transparent 45%),
+    radial-gradient(circle at left 35%, #ebeff5 0%, transparent 50%),
+    var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+}
+
+#app {
+  min-height: 100vh;
+  padding: 20px 24px 110px;
+}
+
+body.auth-screen {
+  overflow-y: hidden;
+}
+
+body.auth-screen #app {
+  min-height: 100vh;
+  padding: 0;
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  line-height: 1.2;
+  font-family: var(--font-heading);
+}
+
+h2 {
+  font-size: 1.2rem;
+  margin-bottom: 12px;
+}
+
+p {
+  margin: 0;
+}
+
+a {
+  color: inherit;
+}
+
+label {
+  display: grid;
+  gap: 6px;
+  font-size: 0.94rem;
+  color: var(--text);
+}
+
+input,
+select,
+button {
+  min-height: 40px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line-strong);
+  padding: 8px 12px;
+  font: inherit;
+  color: var(--text);
+  background: #fff;
+}
+
+button {
+  cursor: pointer;
+  transition: 0.16s ease;
+}
+
+button:hover:not(:disabled) {
+  border-color: #8795a6;
+  transform: translateY(-1px);
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+summary:focus-visible,
+a:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
+button:disabled,
+input:disabled,
+select:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+th {
+  font-weight: 600;
+}
+
+code {
+  background: #eef2f6;
+  border-radius: 8px;
+  padding: 2px 8px;
+}
+
+.linkish {
+  border: none;
+  background: transparent;
+  color: var(--info);
+  padding: 2px 0;
+  min-height: auto;
+  text-align: center;
+}
+
+.linkish:hover:not(:disabled) {
+  transform: none;
+  text-decoration: underline;
+}

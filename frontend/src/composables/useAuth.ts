@@ -10,6 +10,7 @@ import {
   ssoRegister,
   ssoRequestPasswordReset,
 } from '../services/api'
+import { i18n } from '../i18n'
 import type {
   SsoLoginRequest,
   SsoOauthProvider,
@@ -27,7 +28,19 @@ const initializing = ref(false)
 const submitting = ref(false)
 const lastError = ref<string | null>(null)
 const initialized = ref(false)
-const EMAIL_CONFIRM_REQUIRED_ERROR = 'Email is not confirmed. Please confirm your email before signing in.'
+
+function tAuth(key: string, fallback: string): string {
+  const translated = i18n.global.t(key)
+  if (typeof translated === 'string' && translated !== key) {
+    return translated
+  }
+  return fallback
+}
+
+const EMAIL_CONFIRM_REQUIRED_ERROR = tAuth(
+  'auth.errors.emailNotConfirmed',
+  'Email is not confirmed. Please confirm your email before signing in.',
+)
 
 function readStoredToken(): string | null {
   try {
@@ -99,8 +112,9 @@ export function useAuth() {
     return fullName || user.value.email || ''
   })
 
-  async function bootstrap(options?: { showErrors?: boolean }) {
-    if (initialized.value || initializing.value) return
+  async function bootstrap(options?: { showErrors?: boolean; force?: boolean }) {
+    if (initializing.value) return
+    if (initialized.value && !options?.force) return
     initializing.value = true
     lastError.value = null
     const showErrors = options?.showErrors ?? false
@@ -115,12 +129,18 @@ export function useAuth() {
         if (refreshed.access_token) {
           await authenticateByToken(refreshed.access_token)
         } else if (showErrors) {
-          lastError.value = 'Could not restore session after OAuth login.'
+          lastError.value = tAuth(
+            'auth.errors.oauthRestoreFailed',
+            'Could not restore session after OAuth login.',
+          )
         }
       } catch (err) {
         clearSessionState()
         if (showErrors) {
-          lastError.value = err instanceof Error ? err.message : 'Unable to restore session.'
+          lastError.value =
+            err instanceof Error
+              ? err.message
+              : tAuth('auth.errors.sessionRestoreFailed', 'Unable to restore session.')
         }
       }
     } finally {
@@ -136,12 +156,15 @@ export function useAuth() {
       const token = await ssoLogin(payload)
       const ok = await authenticateByToken(token.access_token)
       if (!ok) {
-        throw new Error(lastError.value || 'Authentication failed after login')
+        throw new Error(
+          lastError.value ||
+            tAuth('auth.errors.authAfterLoginFailed', 'Authentication failed after login'),
+        )
       }
     } catch (err) {
       clearSessionState()
       if (!lastError.value) {
-        lastError.value = err instanceof Error ? err.message : 'Login failed'
+        lastError.value = err instanceof Error ? err.message : tAuth('auth.errors.loginFailed', 'Login failed')
       }
       throw err
     } finally {
@@ -155,7 +178,8 @@ export function useAuth() {
     try {
       return await ssoRegister(payload)
     } catch (err) {
-      lastError.value = err instanceof Error ? err.message : 'Registration failed'
+      lastError.value =
+        err instanceof Error ? err.message : tAuth('auth.errors.registerFailed', 'Registration failed')
       throw err
     } finally {
       submitting.value = false
@@ -169,7 +193,7 @@ export function useAuth() {
       await ssoLogout()
     } catch (err) {
       // Keep local logout behavior regardless of server response.
-      lastError.value = err instanceof Error ? err.message : 'Logout failed'
+      lastError.value = err instanceof Error ? err.message : tAuth('auth.errors.logoutFailed', 'Logout failed')
     } finally {
       clearSessionState()
       submitting.value = false
@@ -182,7 +206,10 @@ export function useAuth() {
     try {
       return await ssoRequestPasswordReset(payload)
     } catch (err) {
-      lastError.value = err instanceof Error ? err.message : 'Password reset request failed'
+      lastError.value =
+        err instanceof Error
+          ? err.message
+          : tAuth('auth.errors.passwordResetRequestFailed', 'Password reset request failed')
       throw err
     } finally {
       submitting.value = false
@@ -195,7 +222,10 @@ export function useAuth() {
     try {
       return await ssoConfirmPasswordReset(token)
     } catch (err) {
-      lastError.value = err instanceof Error ? err.message : 'Password reset confirmation failed'
+      lastError.value =
+        err instanceof Error
+          ? err.message
+          : tAuth('auth.errors.passwordResetConfirmFailed', 'Password reset confirmation failed')
       throw err
     } finally {
       submitting.value = false
@@ -208,7 +238,8 @@ export function useAuth() {
     try {
       await ssoConfirmEmail(token)
     } catch (err) {
-      lastError.value = err instanceof Error ? err.message : 'Email confirmation failed'
+      lastError.value =
+        err instanceof Error ? err.message : tAuth('auth.errors.emailConfirmFailed', 'Email confirmation failed')
       throw err
     } finally {
       submitting.value = false

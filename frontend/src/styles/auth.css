@@ -1,0 +1,138 @@
+.auth-page {
+  min-height: calc(100vh - 48px);
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  position: relative;
+}
+
+.auth-lang-corner {
+  position: fixed;
+  top: 16px;
+  right: 20px;
+  z-index: 40;
+}
+
+.auth-card {
+  width: min(420px, 100%);
+  display: grid;
+  gap: 12px;
+  box-shadow: 0 4px 16px rgba(24, 37, 56, 0.06);
+}
+
+.auth-head {
+  display: block;
+}
+
+.auth-copy {
+  text-align: center;
+}
+
+.auth-copy h1 {
+  font-size: 1.35rem;
+  text-align: center;
+}
+
+.auth-copy p {
+  color: var(--muted);
+  font-size: 0.93rem;
+}
+
+.auth-form {
+  display: grid;
+  gap: 8px;
+}
+
+.auth-form .primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+.auth-form .primary:hover:not(:disabled) {
+  border-color: var(--accent-hover);
+  background: var(--accent-hover);
+}
+
+.auth-error {
+  border: 1px solid #f0c1c1;
+  border-radius: 10px;
+  padding: 8px 10px;
+  color: var(--error);
+  background: #fff3f3;
+}
+
+.auth-notice {
+  border: 1px solid #c8e8e2;
+  border-radius: 10px;
+  padding: 8px 10px;
+  color: #0b5e53;
+  background: #eefaf7;
+}
+
+.auth-divider {
+  margin: 2px 0;
+  border-top: 1px solid var(--line);
+  text-align: center;
+}
+
+.auth-divider span {
+  display: inline-block;
+  margin-top: -10px;
+  padding: 0 8px;
+  background: var(--card);
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.auth-oauth {
+  display: grid;
+  gap: 8px;
+}
+
+.auth-oauth-btn {
+  width: 100%;
+  background: #fff;
+  border: 1px solid var(--line);
+}
+
+.auth-link-centered {
+  justify-self: center;
+}
+
+.auth-forgot-link {
+  margin-top: -2px;
+}
+
+.auth-switch-link {
+  margin-top: 2px;
+}
+
+.password-hints {
+  display: grid;
+  gap: 4px;
+}
+
+.password-hints ul {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 2px;
+}
+
+.password-hints li {
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.password-hints li.ok {
+  color: var(--accent);
+}
+
+@media (max-width: 768px) {
+  .auth-lang-corner {
+    position: static;
+    justify-self: end;
+    margin-bottom: 10px;
+  }
+}

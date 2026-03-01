@@ -1,6 +1,5 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { v4 as uuidv4 } from 'uuid'
 import type { CompareItem, ComparisonDeltaRow, ForecastResult } from '../types/forecast'
 
 const MAX_COMPARE_ITEMS = 4
@@ -9,6 +8,13 @@ function findClosestPoint(result: ForecastResult): ForecastResult['series_p50'][
   const points = result.series_p50.points
   if (!points.length) return null
   return points[points.length - 1]
+}
+
+function makeId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
 }
 
 export function useComparison() {
@@ -20,7 +26,7 @@ export function useComparison() {
     if (items.value.length >= MAX_COMPARE_ITEMS) {
       return { ok: false, reason: t('comparison.maxItems', { max: MAX_COMPARE_ITEMS }) }
     }
-    const id = uuidv4()
+    const id = makeId()
     items.value.push({ id, label, res })
     if (!baseId.value) baseId.value = id
     return { ok: true, reason: null }

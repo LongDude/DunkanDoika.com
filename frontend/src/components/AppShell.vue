@@ -13,15 +13,15 @@
     </header>
 
     <nav class="screen-nav" :aria-label="t('aria.mainNavigation')">
-      <button
+      <RouterLink
         v-for="screen in screens"
         :key="screen.id"
         class="screen-tab"
-        :class="{ active: activeScreen === screen.id }"
-        @click="$emit('change-screen', screen.id)"
+        :class="{ active: currentScreen === screen.id }"
+        :to="{ name: 'workspace', params: { screen: screen.id } }"
       >
         {{ screen.label }}
-      </button>
+      </RouterLink>
     </nav>
 
     <main class="screen-content">
@@ -33,23 +33,38 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { RouterLink, useRoute } from 'vue-router'
 import LanguageSwitcher from './LanguageSwitcher.vue'
-
-type ScreenId = 'dataset' | 'scenarios' | 'forecast' | 'comparison' | 'history' | 'export'
+import type { RouteScreenId } from '../types/ui'
 
 defineProps<{
-  activeScreen: ScreenId
   userName?: string | null
 }>()
 
 defineEmits<{
-  (e: 'change-screen', screen: ScreenId): void
   (e: 'logout'): void
 }>()
 
 const { t } = useI18n()
+const route = useRoute()
 
-const screens = computed<Array<{ id: ScreenId; label: string }>>(() => [
+const currentScreen = computed<RouteScreenId>(() => {
+  const raw = route.params.screen
+  const screen = Array.isArray(raw) ? raw[0] : raw
+  if (
+    screen === 'dataset' ||
+    screen === 'scenarios' ||
+    screen === 'forecast' ||
+    screen === 'comparison' ||
+    screen === 'history' ||
+    screen === 'export'
+  ) {
+    return screen
+  }
+  return 'dataset'
+})
+
+const screens = computed<Array<{ id: RouteScreenId; label: string }>>(() => [
   { id: 'dataset', label: t('nav.dataset') },
   { id: 'scenarios', label: t('nav.scenarios') },
   { id: 'forecast', label: t('nav.forecast') },

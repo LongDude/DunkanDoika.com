@@ -1,0 +1,115 @@
+.app-shell {
+  max-width: 1360px;
+  margin: 0 auto;
+}
+
+.hero {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 20px;
+  margin-bottom: 14px;
+}
+
+.hero-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.hero-copy h1 {
+  font-size: 2rem;
+  margin-bottom: 8px;
+}
+
+.hero-copy p {
+  color: var(--muted);
+}
+
+.screen-nav {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  gap: 8px;
+  padding: 10px;
+  margin-bottom: 14px;
+  background: rgba(244, 247, 251, 0.93);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+
+.screen-tab {
+  min-width: 130px;
+  background: #fff;
+  text-decoration: none;
+  color: var(--text);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line-strong);
+  padding: 8px 12px;
+  transition: 0.16s ease;
+}
+
+.screen-tab:hover {
+  border-color: #8795a6;
+  transform: translateY(-1px);
+}
+
+.screen-tab.active {
+  border-color: var(--accent);
+  color: #fff;
+  background: var(--accent);
+}
+
+.screen-content {
+  display: block;
+}
+
+.screen-stack {
+  display: grid;
+  gap: 14px;
+}
+
+@media (max-width: 1024px) {
+  #app {
+    padding: 16px 16px 130px;
+  }
+
+  .screen-tab {
+    min-width: auto;
+    flex: 1;
+  }
+}
+
+@media (max-width: 768px) {
+  #app {
+    padding: 12px 10px 150px;
+  }
+
+  .hero {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .hero-actions {
+    justify-content: flex-start;
+  }
+
+  .hero-copy h1 {
+    font-size: 1.6rem;
+  }
+
+  .screen-nav {
+    overflow-x: auto;
+  }
+
+  .screen-tab {
+    flex: 0 0 auto;
+  }
+}
