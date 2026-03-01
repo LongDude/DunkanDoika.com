@@ -1,36 +1,39 @@
 <template>
   <section class="card">
     <h2>{{ t('screen.dataset') }}</h2>
-    <div class="upload-row dataset-source-row">
-      <label class="upload-label">
-        <span>{{ t('dataset.uploadLabel') }}</span>
-        <input type="file" accept=".csv" @change="$emit('file-change', $event)" />
-      </label>
+    <div class="dataset-source-row">
+      <div class="upload-row">
 
-      <div class="dataset-picker">
-        <label>
-          <span>{{ t('dataset.selectExisting') }}</span>
-          <select v-model="selectedDatasetId" :disabled="datasetsLoading || datasets.length === 0">
-            <option value="">{{ t('dataset.selectExistingPlaceholder') }}</option>
-            <option v-for="item in datasets" :key="item.dataset_id" :value="item.dataset_id">
-              {{ item.original_filename }} - {{ formatDate(item.created_at, localeAsApp) }}
-            </option>
-          </select>
+        <label class="upload-label">
+          <span>{{ t('dataset.uploadLabel') }}</span>
+          <input type="file" accept=".csv" @change="$emit('file-change', $event)" />
         </label>
-        <div class="row">
-          <button class="btn btn-ghost" @click="$emit('refresh-datasets')" :disabled="datasetsLoading">
-            {{ t('dataset.refreshList') }}
-          </button>
-          <button
+        
+        <div class="dataset-picker">
+          <label>
+            <span>{{ t('dataset.selectExisting') }}</span>
+            <select v-model="selectedDatasetId" :disabled="datasetsLoading || datasets.length === 0">
+              <option value="">{{ t('dataset.selectExistingPlaceholder') }}</option>
+              <option v-for="item in datasets" :key="item.dataset_id" :value="item.dataset_id">
+                {{ item.original_filename }} - {{ formatDate(item.created_at, localeAsApp) }}
+              </option>
+            </select>
+          </label>
+          <div class="row">
+            <button class="btn btn-ghost" @click="$emit('refresh-datasets')" :disabled="datasetsLoading">
+              {{ t('dataset.refreshList') }}
+            </button>
+            <button
             class="btn btn-secondary"
             :disabled="!selectedDatasetId || datasetsLoading"
             @click="onUseSelectedDataset"
-          >
+            >
             {{ t('dataset.useSelected') }}
           </button>
           <button class="btn btn-secondary" @click="$emit('refresh')" :disabled="!dataset">
             {{ t('buttons.refresh') }}
           </button>
+        </div>
         </div>
       </div>
     </div>
