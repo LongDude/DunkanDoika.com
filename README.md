@@ -7,7 +7,7 @@ Backend-first application for dairy herd forecasting with async jobs, live progr
 ### [DunkanDoika (link)](http://dunkandoika.liveisfpv.ru:8080/)
 
 ## Прогнозы
-Размещены в директории [Forecasts](./Forecasts/README.md)
+Размещены в директории [Results](./Results/README.md)
 
 ## Stack
 

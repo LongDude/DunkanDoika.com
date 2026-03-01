@@ -15,16 +15,14 @@ ForecastData - csv-файлы с данными прогнозов для каж
 
 # Графики прогнозов
 ## Прогноз 1
+<div style="text-align:center"><img src="./Graphics/ds3-DIN+threshold.jpg" alt="Датасет 1 - DIN + допуск" /></div>
+<div style="text-align:center"><img src="./Graphics/ds3-dynamic.jpg" alt="Датасет 1 - Динамика стада" /></div>
 
-![Датасет 1 - DIN + допуск](./Graphics/ds1-DIN+threshold.jpg)
-![Датасет 1 - Динамика стада](./Graphics/ds1-dynamic.jpg)
 
 ## Прогноз 2
-
-![Датасет 2 - DIN + допуск](./Graphics/ds2-DIN+threshold.jpg)
-![Датасет 2 - Динамика стада](./Graphics/ds2-dynamic.jpg)
+<div style="text-align:center"><img src="./Graphics/ds3-DIN+threshold.jpg" alt="Датасет 2 - DIN + допуск" /></div>
+<div style="text-align:center"><img src="./Graphics/ds3-dynamic.jpg" alt="Датасет 2 - Динамика стада" /></div>
 
 ## Прогноз 3
-
-![Датасет 3 - DIN + допуск](./Graphics/ds3-DIN+threshold.jpg)
-![Датасет 3 - Динамика стада](./Graphics/ds3-dynamic.jpg)
+<div style="text-align:center"><img src="./Graphics/ds3-DIN+threshold.jpg" alt="Датасет 3 - DIN + допуск" /></div>
+<div style="text-align:center"><img src="./Graphics/ds3-dynamic.jpg" alt="Датасет 3 - Динамика стада" /></div>
