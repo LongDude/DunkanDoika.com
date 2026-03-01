@@ -27,7 +27,7 @@
         <input type="date" v-model="history.dateTo.value" />
       </label>
       <label>
-        {{  }}
+        {{'ㅤ'}}
         <button :disabled="history.loading.value" @click="$emit('refresh')">{{ t('buttons.refresh') }}</button>
       </label>
     </div>
