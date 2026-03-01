@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import io
 import json
 from math import floor
 import time
@@ -15,8 +14,7 @@ from app.live.events import publish_job_event
 from app.repositories.datasets import DatasetRepository
 from app.repositories.forecast_jobs import ForecastJobRepository
 from app.simulator.exporter import export_forecast_csv, export_forecast_xlsx
-from app.simulator.forecast import run_forecast
-from app.simulator.loader import load_dataset_df
+from app.simulator.forecast_herd_m5 import run_forecast_herd_m5
 from app.storage.object_storage import storage_client
 
 T = TypeVar("T")
@@ -108,8 +106,6 @@ def run_forecast_job(forecast_job_id: str) -> None:
                 )
             return
 
-        df = load_dataset_df(io.BytesIO(csv_bytes))
-
         def on_progress(completed_runs: int, all_runs: int, partial_result: ForecastResult) -> None:
             progress = 10 + floor(80 * completed_runs / max(1, all_runs))
             progress = min(progress, 90)
@@ -134,13 +130,12 @@ def run_forecast_job(forecast_job_id: str) -> None:
                 },
             )
 
-        result = run_forecast(
-            df,
+        result = run_forecast_herd_m5(
+            csv_bytes,
             params,
             parallel_enabled=settings.mc_parallel_enabled,
             max_processes=settings.mc_max_processes,
             batch_size=settings.mc_batch_size,
-            dim_mode=params.dim_mode or settings.dim_mode,
             simulation_version=settings.simulation_version,
             progress_callback=on_progress,
         )

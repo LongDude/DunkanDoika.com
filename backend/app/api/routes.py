@@ -29,6 +29,7 @@ from app.api.schemas import (
     ScenarioInfo,
     ScenarioParams,
     UserPresetCreateRequest,
+    UserPresetParams,
     UserPresetResponse,
     UserPresetUpdateRequest,
 )
@@ -43,6 +44,7 @@ from app.repositories.scenarios import ScenarioRepository
 from app.repositories.user_presets import UserPresetRepository
 from app.security.jwt_auth import AuthUser, get_current_user, get_optional_user
 from app.simulator.loader import DatasetValidationError
+from app.simulator.forecast_herd_m5 import resolve_dataset_start_date
 from app.storage.object_storage import storage_client
 
 router = APIRouter()
@@ -73,14 +75,50 @@ def _to_history_item(item) -> HistoryJobListItem:
 
 
 def _to_preset_response(item) -> UserPresetResponse:
+    schema_version = _schema_version_from_params_json(item.params_json)
+    is_legacy = schema_version == "legacy_v1"
+    params = None
+    if not is_legacy:
+        try:
+            params = UserPresetParams.model_validate(item.params_json)
+        except ValidationError:
+            schema_version = "legacy_v1"
+            is_legacy = True
+
     return UserPresetResponse(
         preset_id=item.preset_id,
         owner_user_id=item.owner_user_id,
         name=item.name,
-        params=item.params_json,
+        schema_version=schema_version,
+        is_legacy=is_legacy,
+        legacy_reason="Preset created with legacy schema" if is_legacy else None,
+        params=params,
         created_at=item.created_at,
         updated_at=item.updated_at,
     )
+
+
+def _schema_version_from_params_json(params_json: dict | None) -> str:
+    if isinstance(params_json, dict) and "mode" in params_json and "purchase_policy" in params_json:
+        return "herd_m5_v2"
+    return "legacy_v1"
+
+
+def _normalize_report_date_with_dataset(dataset_row, params: ScenarioParams) -> ScenarioParams:
+    try:
+        csv_bytes = storage_client.get_bytes(storage_client.datasets_bucket, dataset_row.object_key)
+        factual_report_date = resolve_dataset_start_date(csv_bytes)
+    except Exception as exc:
+        raise api_error(
+            422,
+            "REPORT_DATE_VALIDATION_FAILED",
+            "Unable to validate report_date against dataset",
+            {"reason": str(exc)},
+        )
+    if params.report_date != factual_report_date:
+        # Source of truth is dataset factual date; normalize payload for robust execution.
+        return params.model_copy(update={"report_date": factual_report_date})
+    return params
 
 
 def _utc_now_iso() -> str:
@@ -276,15 +314,20 @@ def get_dataset_quality(dataset_id: str, session: Session = Depends(get_db_sessi
 @router.post("/scenarios", response_model=ScenarioDetail)
 def scenario_create(req: ScenarioCreateRequest, session: Session = Depends(get_db_session)) -> ScenarioDetail:
     datasets = DatasetRepository(session)
-    if datasets.get(req.params.dataset_id) is None:
+    dataset = datasets.get(req.params.dataset_id)
+    if dataset is None:
         raise api_error(404, "DATASET_NOT_FOUND", "Dataset not found")
+    normalized_params = _normalize_report_date_with_dataset(dataset, req.params)
 
-    scenario = ScenarioRepository(session).create(req.name, req.params)
+    scenario = ScenarioRepository(session).create(req.name, normalized_params)
     return ScenarioDetail(
         scenario_id=scenario.scenario_id,
         name=scenario.name,
         created_at=scenario.created_at.isoformat(timespec="seconds"),
-        params=req.params,
+        schema_version="herd_m5_v2",
+        is_legacy=False,
+        legacy_reason=None,
+        params=normalized_params,
     )
 
 
@@ -293,18 +336,26 @@ def scenario_list(session: Session = Depends(get_db_session)) -> list[ScenarioIn
     rows = ScenarioRepository(session).list()
     out: list[ScenarioInfo] = []
     for row in rows:
-        try:
-            params = ScenarioParams.model_validate(row.params_json)
-        except ValidationError:
-            continue
+        schema_version = _schema_version_from_params_json(row.params_json)
+        is_legacy = schema_version == "legacy_v1"
+        params: ScenarioParams | None = None
+        if not is_legacy:
+            try:
+                params = ScenarioParams.model_validate(row.params_json)
+            except ValidationError:
+                schema_version = "legacy_v1"
+                is_legacy = True
         out.append(
             ScenarioInfo(
                 scenario_id=row.scenario_id,
                 name=row.name,
                 created_at=row.created_at.isoformat(timespec="seconds"),
                 dataset_id=row.dataset_id,
-                report_date=params.report_date,
-                horizon_months=params.horizon_months,
+                report_date=params.report_date if params else None,
+                horizon_months=params.horizon_months if params else None,
+                schema_version=schema_version,
+                is_legacy=is_legacy,
+                legacy_reason="Scenario created with legacy schema" if is_legacy else None,
             )
         )
     return out
@@ -315,6 +366,18 @@ def scenario_get(scenario_id: str, session: Session = Depends(get_db_session)) -
     row = ScenarioRepository(session).get(scenario_id)
     if row is None:
         raise api_error(404, "SCENARIO_NOT_FOUND", "Scenario not found")
+    schema_version = _schema_version_from_params_json(row.params_json)
+    is_legacy = schema_version == "legacy_v1"
+    if is_legacy:
+        return ScenarioDetail(
+            scenario_id=row.scenario_id,
+            name=row.name,
+            created_at=row.created_at.isoformat(timespec="seconds"),
+            schema_version=schema_version,
+            is_legacy=True,
+            legacy_reason="Scenario created with legacy schema",
+            params=None,
+        )
     try:
         params = ScenarioParams.model_validate(row.params_json)
     except ValidationError as exc:
@@ -323,6 +386,9 @@ def scenario_get(scenario_id: str, session: Session = Depends(get_db_session)) -
         scenario_id=row.scenario_id,
         name=row.name,
         created_at=row.created_at.isoformat(timespec="seconds"),
+        schema_version="herd_m5_v2",
+        is_legacy=False,
+        legacy_reason=None,
         params=params,
     )
 
@@ -337,12 +403,14 @@ def create_forecast_job(
     session: Session = Depends(get_db_session),
     user: AuthUser | None = Depends(get_optional_user),
 ) -> CreateForecastJobResponse:
-    if DatasetRepository(session).get(params.dataset_id) is None:
+    dataset = DatasetRepository(session).get(params.dataset_id)
+    if dataset is None:
         raise api_error(404, "DATASET_NOT_FOUND", "Dataset not found")
+    normalized_params = _normalize_report_date_with_dataset(dataset, params)
     create_kwargs: dict[str, str] = {}
     if user is not None:
         create_kwargs["owner_user_id"] = user.user_id
-    job = ForecastJobRepository(session).create(params=params, **create_kwargs)
+    job = ForecastJobRepository(session).create(params=normalized_params, **create_kwargs)
     enqueue_forecast_job(job.job_id)
     return CreateForecastJobResponse(job=_to_job_info(job))
 
@@ -492,6 +560,9 @@ def get_my_history_job(
     row = ForecastJobRepository(session).get_for_owner(job_id, user.user_id)
     if row is None:
         raise api_error(404, "HISTORY_ITEM_NOT_FOUND", "History job not found")
+    schema_version = _schema_version_from_params_json(row.params_json)
+    if schema_version == "legacy_v1":
+        raise api_error(409, "LEGACY_HISTORY_READ_ONLY", "Legacy history item cannot be loaded into editor")
     try:
         params = ScenarioParams.model_validate(row.params_json)
     except ValidationError as exc:
@@ -603,6 +674,11 @@ def update_my_preset(
     user: AuthUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
 ) -> UserPresetResponse:
+    existing = UserPresetRepository(session).get_for_owner(preset_id, user.user_id)
+    if existing is None:
+        raise api_error(404, "PRESET_NOT_FOUND", "Preset not found")
+    if _schema_version_from_params_json(existing.params_json) == "legacy_v1":
+        raise api_error(409, "LEGACY_PRESET_READ_ONLY", "Legacy preset cannot be updated")
     row = UserPresetRepository(session).update(
         preset_id=preset_id,
         owner_user_id=user.user_id,
@@ -653,16 +729,25 @@ def scenario_run(
     scenario = ScenarioRepository(session).get(scenario_id)
     if scenario is None:
         raise api_error(404, "SCENARIO_NOT_FOUND", "Scenario not found")
+    schema_version = _schema_version_from_params_json(scenario.params_json)
+    if schema_version == "legacy_v1":
+        raise api_error(409, "LEGACY_SCENARIO_READ_ONLY", "Legacy scenario cannot be executed")
     try:
         params = ScenarioParams.model_validate(scenario.params_json)
     except ValidationError as exc:
         raise api_error(422, "SCENARIO_PARAMS_INVALID", "Scenario params are inconsistent", {"reason": str(exc)})
-    if DatasetRepository(session).get(params.dataset_id) is None:
+    dataset = DatasetRepository(session).get(params.dataset_id)
+    if dataset is None:
         raise api_error(404, "DATASET_NOT_FOUND", "Dataset not found")
+    normalized_params = _normalize_report_date_with_dataset(dataset, params)
     create_kwargs: dict[str, str] = {}
     if user is not None:
         create_kwargs["owner_user_id"] = user.user_id
-    job = ForecastJobRepository(session).create(params=params, scenario_id=scenario.scenario_id, **create_kwargs)
+    job = ForecastJobRepository(session).create(
+        params=normalized_params,
+        scenario_id=scenario.scenario_id,
+        **create_kwargs,
+    )
     enqueue_forecast_job(job.job_id)
     return CreateForecastJobResponse(job=_to_job_info(job))
 

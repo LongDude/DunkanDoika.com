@@ -1,6 +1,5 @@
 from __future__ import annotations
 from functools import lru_cache
-from typing import Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -27,7 +26,6 @@ class Settings(BaseSettings):
     mc_max_processes: int = Field(default=24)
     mc_batch_size: int = Field(default=32)
     ws_heartbeat_seconds: int = Field(default=15)
-    dim_mode: Literal["from_calving", "from_dataset_field"] = Field(default="from_calving")
     simulation_version: str = Field(default="1.1.0")
     sso_jwt_secret: str = Field(default="")
     sso_jwt_algorithms: str = Field(default="HS256")

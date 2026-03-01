@@ -36,13 +36,34 @@
                 @change="toggleSelected(preset.preset_id)"
               />
             </td>
-            <td>{{ preset.name }}</td>
+            <td>
+              {{ preset.name }}
+              <span v-if="preset.is_legacy" class="muted"> ({{ t('presets.legacyTag') }})</span>
+            </td>
             <td>{{ formatDate(preset.updated_at, localeAsApp) }}</td>
             <td class="presets-actions-cell">
               <div class="row-actions preset-actions">
-                <button @click="applyPreset(preset.preset_id)">{{ t('presets.apply') }}</button>
-                <button @click="updatePresetParams(preset.preset_id)">{{ t('presets.updateFromCurrent') }}</button>
-                <button @click="renamePreset(preset.preset_id, preset.name)">{{ t('presets.rename') }}</button>
+                <button
+                  @click="applyPreset(preset.preset_id)"
+                  :disabled="preset.is_legacy"
+                  :title="preset.legacy_reason ?? ''"
+                >
+                  {{ t('presets.apply') }}
+                </button>
+                <button
+                  @click="updatePresetParams(preset.preset_id)"
+                  :disabled="preset.is_legacy"
+                  :title="preset.legacy_reason ?? ''"
+                >
+                  {{ t('presets.updateFromCurrent') }}
+                </button>
+                <button
+                  @click="renamePreset(preset.preset_id, preset.name)"
+                  :disabled="preset.is_legacy"
+                  :title="preset.legacy_reason ?? ''"
+                >
+                  {{ t('presets.rename') }}
+                </button>
                 <button @click="deleteOne(preset.preset_id)">{{ t('common.remove') }}</button>
               </div>
             </td>
@@ -108,7 +129,11 @@ async function createPreset() {
 function applyPreset(presetId: string) {
   const preset = props.editor.userPresets.value.find(x => x.preset_id === presetId)
   if (!preset) return
-  props.editor.applyUserPreset(preset)
+  try {
+    props.editor.applyUserPreset(preset)
+  } catch (err) {
+    toast.notify('error', `${t('alerts.loadFailed')}: ${err instanceof Error ? err.message : ''}`)
+  }
 }
 
 async function updatePresetParams(presetId: string) {

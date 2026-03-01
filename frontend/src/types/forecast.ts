@@ -40,9 +40,17 @@ export type EventsByMonth = {
   heifer_intros: number
 }
 
+export type ScenarioMode = 'empirical' | 'theoretical'
+export type PurchasePolicy = 'manual' | 'auto_counter' | 'auto_forecast'
+export type SchemaVersion = 'legacy_v1' | 'herd_m5_v2'
+
 export type ForecastResultMeta = {
-  dim_mode: 'from_calving' | 'from_dataset_field'
+  engine: 'herd_m5'
+  mode: ScenarioMode
+  purchase_policy: PurchasePolicy
+  confidence_central: number
   assumptions: string[]
+  warnings: string[]
   simulation_version: string
 }
 
@@ -122,15 +130,33 @@ export type PurchaseItem = {
   days_pregnant?: number | null
 }
 
-export type ServicePeriodParams = {
-  mean_days: number
-  std_days: number
-  min_days_after_calving: number
+export type HerdM5ModelParams = {
+  min_first_insem_age_days: number
+  voluntary_waiting_period: number
+  max_service_period_after_vwp: number
+  population_regulation: number
+  gestation_lo: number
+  gestation_hi: number
+  gestation_mu: number
+  gestation_sigma: number
+  heifer_birth_prob: number
+  purchased_days_to_calving_lo: number
+  purchased_days_to_calving_hi: number
 }
 
-export type HeiferInsemParams = {
-  min_age_days: number
-  max_age_days: number
+export type ScenarioParams = {
+  dataset_id: string
+  report_date?: string | null
+  horizon_months: number
+  future_date?: string | null
+  seed: number
+  mc_runs: number
+  mode: ScenarioMode
+  purchase_policy: PurchasePolicy
+  lead_time_days: number
+  confidence_central: number
+  model: HerdM5ModelParams
+  purchases: PurchaseItem[]
 }
 
 export type ScenarioInfo = {
@@ -138,61 +164,37 @@ export type ScenarioInfo = {
   name: string
   created_at: string
   dataset_id: string
-  report_date: string
-  horizon_months: number
-}
-
-export type CullingParams = {
-  estimate_from_dataset: boolean
-  grouping: CullGrouping
-  fallback_monthly_hazard: number
-  age_band_years: number
-}
-
-export type ReplacementParams = {
-  enabled: boolean
-  annual_heifer_ratio: number
-  lookahead_months: number
-}
-
-export type DimMode = 'from_calving' | 'from_dataset_field'
-
-export type ScenarioParams = {
-  dataset_id: string
-  report_date: string
-  horizon_months: number
-  future_date?: string | null
-  dim_mode?: DimMode | null
-  seed: number
-  mc_runs: number
-  service_period: ServicePeriodParams
-  heifer_insem: HeiferInsemParams
-  culling: CullingParams
-  replacement: ReplacementParams
-  purchases: PurchaseItem[]
+  report_date?: string | null
+  horizon_months?: number | null
+  schema_version: SchemaVersion
+  is_legacy: boolean
+  legacy_reason?: string | null
 }
 
 export type ScenarioDetail = {
   scenario_id: string
   name: string
   created_at: string
-  params: ScenarioParams
+  schema_version: SchemaVersion
+  is_legacy: boolean
+  legacy_reason?: string | null
+  params?: ScenarioParams | null
 }
 
-export type UserPresetParams = Omit<ScenarioParams, 'dataset_id'> & {
-  report_date?: string | null
-}
+export type UserPresetParams = Omit<ScenarioParams, 'dataset_id'>
 
 export type UserPreset = {
   preset_id: string
   owner_user_id: string
   name: string
-  params: UserPresetParams
+  schema_version: SchemaVersion
+  is_legacy: boolean
+  legacy_reason?: string | null
+  params?: UserPresetParams | null
   created_at: string
   updated_at: string
 }
 
-export type CullGrouping = 'lactation' | 'lactation_status' | 'age_band'
 export type ScenarioPreset = 'baseline' | 'conservative' | 'aggressive'
 
 export type UiValidationIssue = {

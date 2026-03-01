@@ -50,7 +50,6 @@ Core variables:
 - `MC_MAX_PROCESSES`
 - `MC_BATCH_SIZE`
 - `WS_HEARTBEAT_SECONDS`
-- `DIM_MODE` (`from_calving` | `from_dataset_field`)
 - `SIMULATION_VERSION`
 - `SSO_JWT_SECRET`
 - `SSO_JWT_ALGORITHMS` (e.g. `HS256`)
@@ -86,6 +85,21 @@ Core variables:
 - `GET /api/scenarios`
 - `GET /api/scenarios/{scenario_id}`
 - `POST /api/scenarios/{scenario_id}/run` -> `202 Accepted` with async job id
+
+Scenario schema is now `herd_m5_v2`:
+
+- `mode`: `empirical | theoretical`
+- `purchase_policy`: `manual | auto_counter | auto_forecast`
+- `lead_time_days`
+- `confidence_central`
+- `model` (`HerdM5ModelParams`)
+- `purchases` (only for `manual` policy)
+
+Legacy scenarios/presets are returned as read-only:
+
+- `schema_version: legacy_v1`
+- `is_legacy: true`
+- `legacy_reason`
 
 ### Forecast Jobs (async-only)
 
@@ -158,8 +172,12 @@ All API errors are normalized:
 
 `ForecastResult.meta` includes:
 
-- `dim_mode`
+- `engine` (`herd_m5`)
+- `mode`
+- `purchase_policy`
+- `confidence_central`
 - `assumptions[]`
+- `warnings[]`
 - `simulation_version`
 
 ## Tests
@@ -175,7 +193,7 @@ Current suite covers:
 
 - input validators (`PurchaseItem`, `ScenarioParams`)
 - dataset quality issue detection
-- DIM mode behavior (`from_calving` vs `from_dataset_field`)
+- herd_m5 scenario validation (`mode`, `purchase_policy`, `future_date`)
 - async API flow (`upload -> job -> result -> exports`)
 
 ## Regression Smoke Script (Data Set 1/2/3)
@@ -184,6 +202,7 @@ Current suite covers:
 docker compose run --rm backend python scripts/regression_smoke.py \
   --api-base http://host.docker.internal:8081/api \
   --datasets-dir /datasets \
+  --mode both \
   --mc-runs 30 \
   --output /tmp/regression-smoke-report.json
 ```
@@ -198,6 +217,7 @@ Compares sequential vs parallel execution and prints speedup:
 docker compose run --rm backend python scripts/mc_benchmark.py \
   --dataset /datasets/Data\ Set\ 1.csv \
   --mc-runs 300 \
+  --mode empirical \
   --max-processes 8 \
   --batch-size 8 \
   --output /tmp/mc-benchmark.json

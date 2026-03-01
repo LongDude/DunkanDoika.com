@@ -38,8 +38,11 @@
         <p v-if="workspace.runLayer.lastRunAt.value" class="muted">
           {{ t('run.lastRunAt') }}: {{ formattedLastRunAt }}
         </p>
-        <p v-if="resultDimModeLabel" class="muted">
-          {{ t('run.dimMode') }}: {{ resultDimModeLabel }}
+        <p v-if="resultModeLabel" class="muted">
+          {{ t('run.mode') }}: {{ resultModeLabel }}
+        </p>
+        <p v-if="resultPolicyLabel" class="muted">
+          {{ t('run.purchasePolicy') }}: {{ resultPolicyLabel }}
         </p>
         <p v-if="workspace.runLayer.result.value?.meta?.simulation_version" class="muted">
           {{ t('run.simulationVersion') }}: {{ workspace.runLayer.result.value?.meta?.simulation_version }}
@@ -207,14 +210,18 @@ const runStatusLabel = computed(() => {
 })
 
 const formattedLastRunAt = computed(() => formatDate(workspace.runLayer.lastRunAt.value, currentLocale.value))
-const resultDimModeLabel = computed(() => {
-  const mode = workspace.runLayer.result.value?.meta?.dim_mode
-  if (mode === 'from_dataset_field') {
-    return t('scenario.dimModeFromDataset')
-  }
-  if (mode === 'from_calving') {
-    return t('scenario.dimModeFromCalving')
-  }
+const resultModeLabel = computed(() => {
+  const mode = workspace.runLayer.result.value?.meta?.mode
+  if (mode === 'empirical') return t('scenario.modeEmpirical')
+  if (mode === 'theoretical') return t('scenario.modeTheoretical')
+  return null
+})
+
+const resultPolicyLabel = computed(() => {
+  const policy = workspace.runLayer.result.value?.meta?.purchase_policy
+  if (policy === 'manual') return t('scenario.policyManual')
+  if (policy === 'auto_counter') return t('scenario.policyAutoCounter')
+  if (policy === 'auto_forecast') return t('scenario.policyAutoForecast')
   return null
 })
 

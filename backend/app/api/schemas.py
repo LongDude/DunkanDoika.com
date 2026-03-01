@@ -7,6 +7,11 @@ from typing import Dict, List, Literal, Optional
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 
+SchemaVersion = Literal["legacy_v1", "herd_m5_v2"]
+ScenarioMode = Literal["empirical", "theoretical"]
+PurchasePolicy = Literal["manual", "auto_counter", "auto_forecast"]
+
+
 class PurchaseItem(BaseModel):
     date_in: date
     count: int = Field(ge=1, le=5000)
@@ -38,42 +43,45 @@ class PurchaseItem(BaseModel):
         return self
 
 
-class ServicePeriodParams(BaseModel):
-    mean_days: int = Field(default=115, ge=50, le=250)
-    std_days: int = Field(default=10, ge=0, le=80)
-    min_days_after_calving: int = Field(default=50, ge=0, le=120)
+class HerdM5ModelParams(BaseModel):
+    min_first_insem_age_days: int = Field(default=365, ge=250, le=800)
+    voluntary_waiting_period: int = Field(default=50, ge=0, le=200)
+    max_service_period_after_vwp: int = Field(default=300, ge=50, le=600)
+    population_regulation: float = Field(default=0.5, ge=0.0, le=1.0)
 
+    gestation_lo: int = Field(default=275, ge=240, le=320)
+    gestation_hi: int = Field(default=280, ge=240, le=330)
+    gestation_mu: float = Field(default=277.5, ge=240.0, le=320.0)
+    gestation_sigma: float = Field(default=2.0, ge=0.1, le=20.0)
 
-class HeiferInsemParams(BaseModel):
-    min_age_days: int = Field(default=365, ge=250, le=700)
-    max_age_days: int = Field(default=395, ge=250, le=800)
+    heifer_birth_prob: float = Field(default=0.5, ge=0.0, le=1.0)
 
+    purchased_days_to_calving_lo: int = Field(default=1, ge=1, le=280)
+    purchased_days_to_calving_hi: int = Field(default=280, ge=1, le=330)
 
-class CullingParams(BaseModel):
-    estimate_from_dataset: bool = True
-    grouping: Literal["lactation", "lactation_status", "age_band"] = "lactation"
-    fallback_monthly_hazard: float = Field(default=0.008, ge=0.0, le=0.2)
-    age_band_years: int = Field(default=2, ge=1, le=10)
-
-
-class ReplacementParams(BaseModel):
-    enabled: bool = True
-    annual_heifer_ratio: float = Field(default=0.30, ge=0.0, le=1.0)
-    lookahead_months: int = Field(default=12, ge=3, le=36)
+    @model_validator(mode="after")
+    def validate_bounds(self) -> "HerdM5ModelParams":
+        if self.gestation_hi < self.gestation_lo:
+            raise ValueError("gestation_hi must be >= gestation_lo")
+        if self.purchased_days_to_calving_hi < self.purchased_days_to_calving_lo:
+            raise ValueError("purchased_days_to_calving_hi must be >= purchased_days_to_calving_lo")
+        return self
 
 
 class ScenarioParams(BaseModel):
     dataset_id: str
-    report_date: date
+    report_date: Optional[date] = None
     horizon_months: int = Field(default=36, ge=1, le=120)
     future_date: Optional[date] = None
-    dim_mode: Optional[Literal["from_calving", "from_dataset_field"]] = None
     seed: int = 42
-    mc_runs: int = Field(default=1, ge=1, le=50000)
-    service_period: ServicePeriodParams = Field(default_factory=ServicePeriodParams)
-    heifer_insem: HeiferInsemParams = Field(default_factory=HeiferInsemParams)
-    culling: CullingParams = Field(default_factory=CullingParams)
-    replacement: ReplacementParams = Field(default_factory=ReplacementParams)
+    mc_runs: int = Field(default=50, ge=1, le=50000)
+
+    mode: ScenarioMode = "empirical"
+    purchase_policy: PurchasePolicy = "manual"
+    lead_time_days: int = Field(default=90, ge=1, le=365)
+    confidence_central: float = Field(default=0.90, ge=0.50, le=0.99)
+
+    model: HerdM5ModelParams = Field(default_factory=HerdM5ModelParams)
     purchases: List[PurchaseItem] = Field(default_factory=list)
 
     @field_validator("future_date", mode="before")
@@ -82,6 +90,14 @@ class ScenarioParams(BaseModel):
         if isinstance(value, str) and not value.strip():
             return None
         return value
+
+    @model_validator(mode="after")
+    def validate_policy(self) -> "ScenarioParams":
+        if self.purchase_policy != "manual" and len(self.purchases) > 0:
+            raise ValueError("purchases are supported only when purchase_policy='manual'")
+        if self.future_date is not None and self.future_date.day != 1:
+            raise ValueError("future_date must be the first day of month")
+        return self
 
 
 class DatasetQualityIssue(BaseModel):
@@ -93,8 +109,12 @@ class DatasetQualityIssue(BaseModel):
 
 
 class ForecastResultMeta(BaseModel):
-    dim_mode: Literal["from_calving", "from_dataset_field"]
+    engine: Literal["herd_m5"] = "herd_m5"
+    mode: ScenarioMode
+    purchase_policy: PurchasePolicy
+    confidence_central: float
     assumptions: List[str] = Field(default_factory=list)
+    warnings: List[str] = Field(default_factory=list)
     simulation_version: str
 
 
@@ -152,15 +172,21 @@ class ScenarioInfo(BaseModel):
     name: str
     created_at: str
     dataset_id: str
-    report_date: date
-    horizon_months: int
+    report_date: Optional[date] = None
+    horizon_months: Optional[int] = None
+    schema_version: SchemaVersion
+    is_legacy: bool
+    legacy_reason: Optional[str] = None
 
 
 class ScenarioDetail(BaseModel):
     scenario_id: str
     name: str
     created_at: str
-    params: ScenarioParams
+    schema_version: SchemaVersion
+    is_legacy: bool
+    legacy_reason: Optional[str] = None
+    params: Optional[ScenarioParams] = None
 
 
 class ForecastJobStatus(str, Enum):
@@ -234,13 +260,15 @@ class UserPresetParams(BaseModel):
     report_date: Optional[date] = None
     horizon_months: int = Field(default=36, ge=1, le=120)
     future_date: Optional[date] = None
-    dim_mode: Optional[Literal["from_calving", "from_dataset_field"]] = None
     seed: int = 42
-    mc_runs: int = Field(default=1, ge=1, le=50000)
-    service_period: ServicePeriodParams = Field(default_factory=ServicePeriodParams)
-    heifer_insem: HeiferInsemParams = Field(default_factory=HeiferInsemParams)
-    culling: CullingParams = Field(default_factory=CullingParams)
-    replacement: ReplacementParams = Field(default_factory=ReplacementParams)
+    mc_runs: int = Field(default=50, ge=1, le=50000)
+
+    mode: ScenarioMode = "empirical"
+    purchase_policy: PurchasePolicy = "manual"
+    lead_time_days: int = Field(default=90, ge=1, le=365)
+    confidence_central: float = Field(default=0.90, ge=0.50, le=0.99)
+
+    model: HerdM5ModelParams = Field(default_factory=HerdM5ModelParams)
     purchases: List[PurchaseItem] = Field(default_factory=list)
 
     @field_validator("future_date", mode="before")
@@ -249,6 +277,14 @@ class UserPresetParams(BaseModel):
         if isinstance(value, str) and not value.strip():
             return None
         return value
+
+    @model_validator(mode="after")
+    def validate_policy(self) -> "UserPresetParams":
+        if self.purchase_policy != "manual" and len(self.purchases) > 0:
+            raise ValueError("purchases are supported only when purchase_policy='manual'")
+        if self.future_date is not None and self.future_date.day != 1:
+            raise ValueError("future_date must be the first day of month")
+        return self
 
 
 class UserPresetCreateRequest(BaseModel):
@@ -271,6 +307,9 @@ class UserPresetResponse(BaseModel):
     preset_id: str
     owner_user_id: str
     name: str
-    params: UserPresetParams
+    schema_version: SchemaVersion
+    is_legacy: bool
+    legacy_reason: Optional[str] = None
+    params: Optional[UserPresetParams] = None
     created_at: datetime
     updated_at: datetime

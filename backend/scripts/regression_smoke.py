@@ -8,7 +8,7 @@ from pathlib import Path
 import httpx
 
 
-def _run_dataset(api_base: str, csv_path: Path, mc_runs: int) -> dict:
+def _run_dataset(api_base: str, csv_path: Path, mc_runs: int, mode: str) -> dict:
     with httpx.Client(timeout=120) as client:
         with csv_path.open("rb") as fh:
             upload = client.post(
@@ -25,15 +25,23 @@ def _run_dataset(api_base: str, csv_path: Path, mc_runs: int) -> dict:
             "future_date": None,
             "seed": 42,
             "mc_runs": mc_runs,
-            "service_period": {"mean_days": 115, "std_days": 10, "min_days_after_calving": 50},
-            "heifer_insem": {"min_age_days": 365, "max_age_days": 395},
-            "culling": {
-                "estimate_from_dataset": True,
-                "grouping": "lactation",
-                "fallback_monthly_hazard": 0.008,
-                "age_band_years": 2,
+            "mode": mode,
+            "purchase_policy": "manual",
+            "lead_time_days": 90,
+            "confidence_central": 0.8,
+            "model": {
+                "min_first_insem_age_days": 365,
+                "voluntary_waiting_period": 50,
+                "max_service_period_after_vwp": 300,
+                "population_regulation": 1.0,
+                "gestation_lo": 275,
+                "gestation_hi": 280,
+                "gestation_mu": 277.5,
+                "gestation_sigma": 2.0,
+                "heifer_birth_prob": 0.5,
+                "purchased_days_to_calving_lo": 1,
+                "purchased_days_to_calving_hi": 280,
             },
-            "replacement": {"enabled": True, "annual_heifer_ratio": 0.3, "lookahead_months": 12},
             "purchases": [],
         }
 
@@ -56,6 +64,7 @@ def _run_dataset(api_base: str, csv_path: Path, mc_runs: int) -> dict:
         output = {
             "dataset_file": csv_path.name,
             "dataset_id": dataset["dataset_id"],
+            "mode": mode,
             "job_id": job_id,
             "status": job["status"],
             "duration_sec": round(time.perf_counter() - start, 2),
@@ -86,6 +95,7 @@ def main() -> None:
     parser.add_argument("--api-base", default="http://localhost:8081/api")
     parser.add_argument("--datasets-dir", required=True)
     parser.add_argument("--mc-runs", type=int, default=30)
+    parser.add_argument("--mode", choices=["empirical", "theoretical", "both"], default="both")
     parser.add_argument("--output", default="regression-smoke-report.json")
     args = parser.parse_args()
 
@@ -94,9 +104,11 @@ def main() -> None:
     if not csv_files:
         raise FileNotFoundError(f"No Data Set *.csv found in {base_dir}")
 
-    report = {"api_base": args.api_base, "mc_runs": args.mc_runs, "results": []}
+    report = {"api_base": args.api_base, "mc_runs": args.mc_runs, "mode": args.mode, "results": []}
+    modes = ["empirical", "theoretical"] if args.mode == "both" else [args.mode]
     for csv_path in csv_files:
-        report["results"].append(_run_dataset(args.api_base, csv_path, args.mc_runs))
+        for mode in modes:
+            report["results"].append(_run_dataset(args.api_base, csv_path, args.mc_runs, mode))
 
     out_path = Path(args.output)
     out_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")

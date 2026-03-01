@@ -21,7 +21,8 @@
     <div class="scenario-grid">
       <label>
         {{ t('scenario.reportDate') }}
-        <input type="date" :lang="dateLang" v-model="editor.form.value.report_date" />
+        <input type="date" :lang="dateLang" v-model="editor.form.value.report_date" readonly disabled />
+        <small class="muted">{{ t('scenario.reportDateLocked') }}</small>
         <small v-if="fieldIssue('report_date')" class="field-error">{{ fieldIssue('report_date') }}</small>
       </label>
       <label>
@@ -32,6 +33,7 @@
       <label>
         {{ t('scenario.futureDate') }}
         <input type="date" :lang="dateLang" v-model="editor.form.value.future_date" />
+        <small v-if="fieldIssue('future_date')" class="field-error">{{ fieldIssue('future_date') }}</small>
       </label>
       <label>
         {{ t('scenario.mcRuns') }}
@@ -39,11 +41,32 @@
         <small v-if="fieldIssue('mc_runs')" class="field-error">{{ fieldIssue('mc_runs') }}</small>
       </label>
       <label>
-        {{ t('scenario.dimMode') }}
-        <select v-model="editor.form.value.dim_mode">
-          <option value="from_calving">{{ t('scenario.dimModeFromCalving') }}</option>
-          <option value="from_dataset_field">{{ t('scenario.dimModeFromDataset') }}</option>
+        {{ t('scenario.seed') }}
+        <input type="number" v-model.number="editor.form.value.seed" />
+      </label>
+      <label>
+        {{ t('scenario.mode') }}
+        <select v-model="editor.form.value.mode">
+          <option value="empirical">{{ t('scenario.modeEmpirical') }}</option>
+          <option value="theoretical">{{ t('scenario.modeTheoretical') }}</option>
         </select>
+      </label>
+      <label>
+        {{ t('scenario.purchasePolicy') }}
+        <select v-model="editor.form.value.purchase_policy">
+          <option value="manual">{{ t('scenario.policyManual') }}</option>
+          <option value="auto_counter">{{ t('scenario.policyAutoCounter') }}</option>
+          <option value="auto_forecast">{{ t('scenario.policyAutoForecast') }}</option>
+        </select>
+      </label>
+      <label>
+        {{ t('scenario.leadTimeDays') }}
+        <input type="number" min="1" max="365" v-model.number="editor.form.value.lead_time_days" />
+      </label>
+      <label>
+        {{ t('scenario.confidenceCentral') }}
+        <input type="number" min="0.5" max="0.99" step="0.01" v-model.number="editor.form.value.confidence_central" />
+        <small v-if="fieldIssue('confidence_central')" class="field-error">{{ fieldIssue('confidence_central') }}</small>
       </label>
     </div>
 
@@ -68,13 +91,28 @@
         </thead>
         <tbody>
           <tr v-for="item in editor.scenarioList.value" :key="item.scenario_id">
-            <td>{{ item.name }}</td>
+            <td>
+              {{ item.name }}
+              <span v-if="item.is_legacy" class="muted"> ({{ t('scenario.legacyTag') }})</span>
+            </td>
             <td>{{ formatDate(item.created_at, localeAsApp) }}</td>
-            <td>{{ formatDate(item.report_date, localeAsApp) }}</td>
-            <td>{{ formatNumber(item.horizon_months, localeAsApp) }}</td>
+            <td>{{ formatDate(item.report_date ?? null, localeAsApp) }}</td>
+            <td>{{ formatNumber(item.horizon_months ?? null, localeAsApp) }}</td>
             <td class="row-actions">
-              <button @click="$emit('load-scenario', item.scenario_id)">{{ t('buttons.load') }}</button>
-              <button @click="$emit('run-scenario', item.scenario_id)">{{ t('buttons.runSaved') }}</button>
+              <button
+                @click="$emit('load-scenario', item.scenario_id)"
+                :disabled="item.is_legacy"
+                :title="item.legacy_reason ?? ''"
+              >
+                {{ t('buttons.load') }}
+              </button>
+              <button
+                @click="$emit('run-scenario', item.scenario_id)"
+                :disabled="item.is_legacy"
+                :title="item.legacy_reason ?? ''"
+              >
+                {{ t('buttons.runSaved') }}
+              </button>
             </td>
           </tr>
         </tbody>
