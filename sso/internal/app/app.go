@@ -33,7 +33,7 @@ func NewApp(
 	if baseURL == "" {
 		baseURL = "http://" + cfg.Domain + ":" + cfg.HttpServerConfig.Port
 	}
-	EmailService := service.NewEmailService(&cfg.EmailConfig, baseURL, Logger)
+	EmailService := service.NewEmailService(&cfg.EmailConfig, baseURL, cfg.FrontendURL, Logger)
 	SessionService := service.NewSessionService(SessionRepository, TokenBlocklist, JWTService, Logger)
 	AuthService := service.NewAuthService(JWTService, EmailService, SessionService, UserRepository, TokenBlocklist, Logger)
 	OauthGoogleService := oauth.NewOAuthGoogleService(UserRepository, cfg, Logger)

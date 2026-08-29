@@ -6,7 +6,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"mime"
 	"net/smtp"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -36,10 +39,23 @@ type emailService struct {
 	fromEmail    string
 	jwtSecret    string
 	domainURL    string
+	frontendURL  string
 	logger       *logrus.Logger
 }
 
-func NewEmailService(config *config.EmailConfig, domainURL string, logger *logrus.Logger) EmailService {
+func plainTextMessage(from, to, subject, body string) []byte {
+	body = strings.ReplaceAll(body, "\r\n", "\n")
+	body = strings.ReplaceAll(body, "\n", "\r\n")
+	return []byte(fmt.Sprintf(
+		"From: %s\r\nTo: %s\r\nSubject: %s\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n%s",
+		from,
+		to,
+		mime.QEncoding.Encode("UTF-8", subject),
+		body,
+	))
+}
+
+func NewEmailService(config *config.EmailConfig, domainURL, frontendURL string, logger *logrus.Logger) EmailService {
 	return &emailService{
 		smtpHost:     config.SMTPHost,
 		smtpPort:     config.SMTPPort,
@@ -48,6 +64,7 @@ func NewEmailService(config *config.EmailConfig, domainURL string, logger *logru
 		fromEmail:    config.FromEmail,
 		jwtSecret:    config.JwtSecret,
 		domainURL:    domainURL,
+		frontendURL:  strings.TrimRight(frontendURL, "/"),
 		logger:       logger,
 	}
 }
@@ -92,15 +109,21 @@ func (e *emailService) SendEmailConfirmation(ctx context.Context, userID int, em
 	}
 
 	confirmURL := fmt.Sprintf("%s/api/auth/confirm-email?token=%s", e.domainURL, token)
+	if e.frontendURL != "" {
+		confirmURL = fmt.Sprintf("%s/auth/login?auth_mode=confirm_email&token=%s", e.frontendURL, url.QueryEscape(token))
+	}
 
 	subject := "Подтверждение Email"
 	body := fmt.Sprintf("Здравствуйте!\n\nПерейдите по ссылке для подтверждения почты:\n\n%s\n\nЕсли это не вы — проигнорируйте письмо.", confirmURL)
-	msg := fmt.Sprintf("Subject: %s\r\n\r\n%s", subject, body)
+	msg := plainTextMessage(e.fromEmail, email, subject, body)
 
-	auth := smtp.PlainAuth("", e.smtpUsername, e.smtpPassword, e.smtpHost)
+	var auth smtp.Auth
+	if e.smtpUsername != "" {
+		auth = smtp.PlainAuth("", e.smtpUsername, e.smtpPassword, e.smtpHost)
+	}
 	addr := fmt.Sprintf("%s:%s", e.smtpHost, e.smtpPort)
 
-	return smtp.SendMail(addr, auth, e.fromEmail, []string{email}, []byte(msg))
+	return smtp.SendMail(addr, auth, e.fromEmail, []string{email}, msg)
 }
 
 // VerifyEmailConfirmationToken implements EmailService.
@@ -135,17 +158,23 @@ func (e *emailService) SendPasswordResetConfirmation(ctx context.Context, userID
 	}
 
 	resetURL := fmt.Sprintf("%s/api/auth/password-reset/confirm?token=%s", e.domainURL, token)
+	if e.frontendURL != "" {
+		resetURL = fmt.Sprintf("%s/auth/login?auth_mode=reset_password&token=%s", e.frontendURL, url.QueryEscape(token))
+	}
 	subject := "Password Reset Confirmation"
 	body := fmt.Sprintf(
 		"Hello,\n\nWe received a request to reset the password for this account. To proceed, open the link below within 7 days:\n\n%s\n\nIf you did not request this change, you can safely ignore this email.\n",
 		resetURL,
 	)
-	msg := fmt.Sprintf("Subject: %s\r\n\r\n%s", subject, body)
+	msg := plainTextMessage(e.fromEmail, email, subject, body)
 
-	auth := smtp.PlainAuth("", e.smtpUsername, e.smtpPassword, e.smtpHost)
+	var auth smtp.Auth
+	if e.smtpUsername != "" {
+		auth = smtp.PlainAuth("", e.smtpUsername, e.smtpPassword, e.smtpHost)
+	}
 	addr := fmt.Sprintf("%s:%s", e.smtpHost, e.smtpPort)
 
-	return smtp.SendMail(addr, auth, e.fromEmail, []string{email}, []byte(msg))
+	return smtp.SendMail(addr, auth, e.fromEmail, []string{email}, msg)
 }
 
 // VerifyPasswordResetToken validates the token embedded in the reset link.
@@ -182,10 +211,13 @@ func (e *emailService) SendNewPassword(ctx context.Context, email string, passwo
 		"Hello,\n\nYour password has been successfully reset. Use the password below to sign in:\n\n%s\n\nFor security, change this password after logging in.\n",
 		password,
 	)
-	msg := fmt.Sprintf("Subject: %s\r\n\r\n%s", subject, body)
+	msg := plainTextMessage(e.fromEmail, email, subject, body)
 
-	auth := smtp.PlainAuth("", e.smtpUsername, e.smtpPassword, e.smtpHost)
+	var auth smtp.Auth
+	if e.smtpUsername != "" {
+		auth = smtp.PlainAuth("", e.smtpUsername, e.smtpPassword, e.smtpHost)
+	}
 	addr := fmt.Sprintf("%s:%s", e.smtpHost, e.smtpPort)
 
-	return smtp.SendMail(addr, auth, e.fromEmail, []string{email}, []byte(msg))
+	return smtp.SendMail(addr, auth, e.fromEmail, []string{email}, msg)
 }

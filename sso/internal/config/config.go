@@ -18,6 +18,7 @@ type Config struct {
 	EmailConfig         EmailConfig
 	Domain              string   `env:"DOMAIN" env-default:"localhost"`
 	PublicURL           string   `env:"PUBLIC_URL"`
+	FrontendURL         string   `env:"FRONTEND_URL"`
 	AllowedCORSOrigins  []string `env:"ALLOWED_CORS_ORIGINS" env-separator:","`
 	AllowedRedirectURLs []string `env:"ALLOWED_REDIRECT_URLS" env-separator:","`
 	DefaultAdminEmails  []string `env:"DEFAULT_ADMIN_EMAILS" env-separator:","`
@@ -55,8 +56,8 @@ type MinioConfig struct {
 type EmailConfig struct {
 	SMTPHost     string `env:"SMTP_HOST" env-required:"true"`
 	SMTPPort     string `env:"SMTP_PORT" env-required:"true"`
-	SMTPUsername string `env:"SMTP_USERNAME" env-required:"true"`
-	SMTPPassword string `env:"SMTP_PASSWORD" env-required:"true"`
+	SMTPUsername string `env:"SMTP_USERNAME"`
+	SMTPPassword string `env:"SMTP_PASSWORD"`
 	FromEmail    string `env:"FROM_EMAIL" env-required:"true"`
 	JwtSecret    string `env:"SMTP_JWT_SECRET" env-required:"true"`
 }

@@ -52,6 +52,105 @@ services:
       exit 0;
       "
 
+  sso-postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${SSO_POSTGRES_DB}
+      POSTGRES_USER: ${SSO_POSTGRES_USER}
+      POSTGRES_PASSWORD: ${SSO_POSTGRES_PASSWORD}
+    volumes:
+      - sso_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${SSO_POSTGRES_USER} -d ${SSO_POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  sso-redis:
+    image: redis:8-alpine
+    command: redis-server --appendonly yes --requirepass ${SSO_REDIS_PASSWORD}
+    environment:
+      SSO_REDIS_PASSWORD: ${SSO_REDIS_PASSWORD}
+    volumes:
+      - sso_redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$${SSO_REDIS_PASSWORD}\" ping | grep PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  sso-mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "${SSO_MAILPIT_UI_PORT}:8025"
+
+  sso-migrator:
+    build:
+      context: ./sso
+      dockerfile: ./tools/migrator/dockerfile
+    environment:
+      DB_HOST: sso-postgres
+      DB_PORT: 5432
+      DB_USER: ${SSO_POSTGRES_USER}
+      DB_PASSWORD: ${SSO_POSTGRES_PASSWORD}
+      DB_NAME: ${SSO_POSTGRES_DB}
+    depends_on:
+      sso-postgres:
+        condition: service_healthy
+
+  sso-core:
+    build:
+      context: ./sso
+      dockerfile: ./dockerfile
+    environment:
+      DOMAIN: ${SSO_DOMAIN}
+      PUBLIC_URL: ${SSO_PUBLIC_URL}
+      FRONTEND_URL: ${SSO_FRONTEND_URL}
+      ALLOWED_REDIRECT_URLS: ${SSO_ALLOWED_REDIRECT_URLS}
+      ALLOWED_CORS_ORIGINS: ${SSO_ALLOWED_CORS_ORIGINS}
+      DEFAULT_ADMIN_EMAILS: ${SSO_DEFAULT_ADMIN_EMAILS}
+      DB_HOST: sso-postgres
+      DB_PORT: 5432
+      DB_USER: ${SSO_POSTGRES_USER}
+      DB_PASSWORD: ${SSO_POSTGRES_PASSWORD}
+      DB_NAME: ${SSO_POSTGRES_DB}
+      DB_SSL: disable
+      REDIS_HOST: sso-redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${SSO_REDIS_PASSWORD}
+      REDIS_DB: 0
+      SMTP_HOST: sso-mailpit
+      SMTP_PORT: 1025
+      SMTP_USERNAME: ""
+      SMTP_PASSWORD: ""
+      FROM_EMAIL: ${SSO_FROM_EMAIL}
+      SMTP_JWT_SECRET: ${SSO_SMTP_JWT_SECRET}
+      JWT_SECRET_KEY: ${SSO_JWT_SECRET}
+      ACCESS_TOKEN_TTL: 15m
+      REFRESH_TOKEN_TTL: 7d
+      COOKIE_PATH: /
+      COOKIE_SECURE: "false"
+      COOKIE_HTTP_ONLY: "true"
+      COOKIE_SAME_SITE: Lax
+      COOKIE_MAX_AGE: 7d
+      HTTP_PORT: 8080
+      GRPC_PORT: 50051
+      GRPC_TIMEOUT: 24h
+      SWAGGER_ENABLED: "true"
+      GOOGLE_CLIENT_ID: ${SSO_GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${SSO_GOOGLE_CLIENT_SECRET}
+      YANDEX_CLIENT_ID: ${SSO_YANDEX_CLIENT_ID}
+      YANDEX_CLIENT_SECRET: ${SSO_YANDEX_CLIENT_SECRET}
+    depends_on:
+      sso-postgres:
+        condition: service_healthy
+      sso-redis:
+        condition: service_healthy
+      sso-mailpit:
+        condition: service_started
+      sso-migrator:
+        condition: service_completed_successfully
+
   backend:
     build:
       context: ./backend
@@ -134,7 +233,10 @@ services:
       - "${FRONTEND_PORT}:80"
     depends_on:
       - backend
+      - sso-core
 
 volumes:
   postgres_data:
   minio_data:
+  sso_postgres_data:
+  sso_redis_data:
