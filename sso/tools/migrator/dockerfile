@@ -1,0 +1,13 @@
+FROM golang:1.24
+
+WORKDIR /tools/migrator
+
+COPY tools/migrator/ .
+
+COPY db ./db
+
+RUN chmod +x migrate.sh
+
+RUN go mod download
+
+ENTRYPOINT ["./migrate.sh"]

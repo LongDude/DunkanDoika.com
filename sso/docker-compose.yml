@@ -1,0 +1,152 @@
+services:
+  core:
+    container_name: SSO_Core
+    build:
+      context: .
+      dockerfile: ./dockerfile
+    ports:
+      - "${GRPC_PORT}:${GRPC_PORT}"
+      # - "${HTTP_PORT}:${HTTP_PORT}"
+      - "${SMTP_PORT}:${SMTP_PORT}"
+    environment:
+      - DOMAIN=${DOMAIN}
+      - PUBLIC_URL=${PUBLIC_URL}
+      - ALLOWED_REDIRECT_URLS=${ALLOWED_REDIRECT_URLS}
+      - ALLOWED_CORS_ORIGINS=${ALLOWED_CORS_ORIGINS}
+      - DEFAULT_ADMIN_EMAILS=${DEFAULT_ADMIN_EMAILS}
+
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME}
+
+      - REDIS_HOST=${REDIS_HOST}
+      - REDIS_PORT=${REDIS_PORT}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT}
+      - SMTP_USERNAME=${SMTP_USERNAME}
+      - SMTP_PASSWORD=${SMTP_PASSWORD}
+      - FROM_EMAIL=${FROM_EMAIL}
+      - SMTP_JWT_SECRET=${SMTP_JWT_SECRET}
+
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+
+      - COOKIE_PATH=${COOKIE_PATH}
+      - COOKIE_SECURE=${COOKIE_SECURE}
+      - COOKIE_HTTP_ONLY=${COOKIE_HTTP_ONLY}
+      - COOKIE_SAME_SITE=${COOKIE_SAME_SITE}
+
+      - HTTP_PORT=${HTTP_PORT}
+      - SWAGGER_ENABLED=${SWAGGER_ENABLED}
+      - SWAGGER_USER=${SWAGGER_USER}
+      - SWAGGER_PASSWORD=${SWAGGER_PASSWORD}
+      - GRPC_PORT=${GRPC_PORT}
+      - GRPC_TIMEOUT=${GRPC_TIMEOUT}
+      
+      
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - YANDEX_CLIENT_ID=${YANDEX_CLIENT_ID}
+      - YANDEX_CLIENT_SECRET=${YANDEX_CLIENT_SECRET}
+      - VK_CLIENT_ID=${VK_CLIENT_ID}
+      - VK_CLIENT_SECRET=${VK_CLIENT_SECRET}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrator:
+        condition: service_completed_successfully
+      redis:
+        condition: service_started
+    networks:
+      - grpc_network
+      - storage_network
+
+  nginx:
+    container_name: SSO_nginx
+    build:
+      context: ./nginx
+    environment:
+      - NGINX_HOST=${DOMAIN}
+      - CORE_UPSTREAM=http://core:${HTTP_PORT}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./certbot/conf:/etc/letsencrypt
+      - ./certbot/www:/var/www/certbot
+    depends_on:
+      core:
+        condition: service_started
+    networks:
+      - grpc_network
+
+  certbot:
+    image: certbot/certbot:latest
+    container_name: SSO_certbot
+    volumes:
+      - ./certbot/conf:/etc/letsencrypt
+      - ./certbot/www:/var/www/certbot
+        
+  
+  postgres:
+    container_name: SSO_db
+    image: postgres:17
+    environment:
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB=${DB_NAME}
+    # ports:
+      # - "15432:${DB_PORT}"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:  # Ждем, пока БД будет готова
+      test: ["CMD", "pg_isready", "-U", "${DB_USER}"]
+      interval: 5s
+      retries: 5
+    networks:
+      - storage_network
+  
+  redis:
+    image: redis:8-alpine
+    container_name: SSO_redis
+    # ports:
+    #   - "${REDIS_PORT}:${REDIS_PORT}"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    networks:
+      - storage_network
+
+
+  migrator:
+    container_name: SSO_migrator
+    build:
+      context: .
+      dockerfile: ./tools/migrator/dockerfile
+    environment:
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME}
+      - DB_PORT=${DB_PORT}
+      - DB_HOST=${DB_HOST}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - storage_network
+    
+
+volumes:
+  postgres_data:
+  redis_data:
+
+# Before start create a network with command
+# docker network create grpc_network
+networks:
+  grpc_network:
+    external: true
+  storage_network:
+    driver: bridge

@@ -1,0 +1,24 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Docker: Go Remote Debug",
+            "type": "go",
+            "request": "attach",
+            "mode": "remote",
+            "remotePath": "/app",
+            "port": 40001,
+            "host": "localhost",
+            // "substitutePath": [
+            //     {
+            //         "from": "C:\\Users\\nason\\Desktop\\Git\\authorization_service",
+            //         "to": "/app"
+            //     }
+            // ],
+            "showLog": true,
+            "trace": "verbose",
+            "logOutput": "debugger",
+            "apiVersion": 2
+        }
+    ]
+}

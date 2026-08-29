@@ -1,0 +1,740 @@
+basePath: /api
+definitions:
+  presenters.ErrorResponse:
+    properties:
+      error:
+        type: string
+    type: object
+  presenters.PasswordResetRequest:
+    properties:
+      email:
+        maxLength: 128
+        type: string
+    required:
+    - email
+    type: object
+  presenters.PasswordResetResponse:
+    properties:
+      message:
+        type: string
+    type: object
+  presenters.TokenResReq:
+    properties:
+      access_token:
+        type: string
+    type: object
+  presenters.UserAdminListResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/presenters.UserAdminResponse'
+        type: array
+      limit:
+        type: integer
+      page:
+        type: integer
+      total:
+        type: integer
+    type: object
+  presenters.UserAdminResponse:
+    properties:
+      email:
+        type: string
+      email_confirmed:
+        type: boolean
+      first_name:
+        type: string
+      id:
+        type: integer
+      last_name:
+        type: string
+      locale_type:
+        type: string
+      photo:
+        type: string
+      roles:
+        items:
+          type: string
+        type: array
+    type: object
+  presenters.UserCreateWithRolesRequest:
+    properties:
+      email:
+        maxLength: 128
+        type: string
+      first_name:
+        maxLength: 128
+        type: string
+      last_name:
+        maxLength: 128
+        type: string
+      password:
+        maxLength: 40
+        minLength: 8
+        type: string
+      roles:
+        items:
+          type: string
+        type: array
+    required:
+    - email
+    - first_name
+    - last_name
+    - password
+    - roles
+    type: object
+  presenters.UserLoginRequest:
+    properties:
+      login:
+        maxLength: 128
+        type: string
+      password:
+        maxLength: 40
+        minLength: 8
+        type: string
+    required:
+    - login
+    - password
+    type: object
+  presenters.UserRegisterRequest:
+    properties:
+      email:
+        maxLength: 128
+        type: string
+      first_name:
+        maxLength: 128
+        type: string
+      last_name:
+        maxLength: 128
+        type: string
+      password:
+        maxLength: 40
+        minLength: 8
+        type: string
+    required:
+    - email
+    - first_name
+    - last_name
+    - password
+    type: object
+  presenters.UserResponse:
+    properties:
+      email:
+        type: string
+      email_confirmed:
+        type: boolean
+      first_name:
+        type: string
+      last_name:
+        type: string
+      locale_type:
+        type: string
+      photo:
+        type: string
+      roles:
+        items:
+          type: string
+        type: array
+    type: object
+  presenters.UserUpdateAdminRequest:
+    properties:
+      email:
+        maxLength: 128
+        type: string
+      first_name:
+        maxLength: 128
+        type: string
+      last_name:
+        maxLength: 128
+        type: string
+      locale_type:
+        example: ru-RU
+        type: string
+      password:
+        maxLength: 40
+        minLength: 8
+        type: string
+      roles:
+        items:
+          type: string
+        type: array
+    type: object
+  presenters.UserUpdateRequest:
+    properties:
+      email:
+        maxLength: 128
+        type: string
+      first_name:
+        maxLength: 128
+        type: string
+      last_name:
+        maxLength: 128
+        type: string
+      locale_type:
+        example: ru-RU
+        type: string
+      password:
+        maxLength: 40
+        minLength: 8
+        type: string
+    type: object
+host: localhost:8080
+info:
+  contact: {}
+  description: SSO для регистрации и авторизации сервисов
+  title: SSO API
+  version: "1.0"
+paths:
+  /auth/admin/users:
+    get:
+      consumes:
+      - application/json
+      description: Returns a paginated list of users with optional filtering
+      parameters:
+      - description: Search by first_name, last_name, email
+        in: query
+        name: q
+        type: string
+      - description: Filter by role
+        in: query
+        name: role
+        type: string
+      - description: Filter by email confirmation status
+        in: query
+        name: email_confirmed
+        type: boolean
+      - description: Filter by locale (e.g., ru)
+        in: query
+        name: locale
+        type: string
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Page size
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/presenters.UserAdminListResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/presenters.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/presenters.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/presenters.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/presenters.ErrorResponse'
+      summary: List users (admin)
+      tags:
+      - User
+    post:
+      consumes:
+      - application/json
+      description: Creates a new user with custom roles.
+      parameters:
+      - description: Create request with roles
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/presenters.UserCreateWithRolesRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/presenters.UserResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/presenters.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/presenters.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/presenters.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/presenters.ErrorResponse'
+      summary: Create user with roles
+      tags:
+      - User
+  /auth/admin/users/{id}:
+    put:
+      consumes:
+      - application/json
+      description: Updates user profile fields including roles by user ID.
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Admin update request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/presenters.UserUpdateAdminRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/presenters.UserResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/presenters.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/presenters.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/presenters.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/presenters.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/presenters.ErrorResponse'
+      summary: Update user (admin)
+      tags:
+      - User
+  /auth/authenticate:
+    get:
+      consumes:
+      - application/json
+      description: Authenticates the user using the provided access token
+      parameters:
+      - description: Bearer access token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/presenters.UserResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/presenters.ErrorResponse'
+      summary: Authenticate user
+      tags:
+      - Auth
+  /auth/confirm-email:
+    get:
+      consumes:
+      - application/json
+      description: Confirms the user's email address by email-confirmation token.
+      parameters:
+      - description: Email confirmation token
+        in: query
+        name: token
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/presenters.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/presenters.ErrorResponse'
+      summary: Confirm email
+      tags:
+      - User
+  /auth/create:
+    post:
+      consumes:
+      - application/json
+      description: Creates a new user and sends an email confirmation link.
+      parameters:
+      - description: Register request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/presenters.UserRegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/presenters.UserResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/presenters.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/presenters.ErrorResponse'
+      summary: Create user
+      tags:
+      - User
+  /auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Logs in the user and returns access and refresh tokens
+      parameters:
+      - description: Login request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/presenters.UserLoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/presenters.TokenResReq'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/presenters.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/presenters.ErrorResponse'
+      summary: Login user
+      tags:
+      - Auth
+  /auth/logout:
+    post:
+      consumes:
+      - application/json
+      description: Logs out the user by invalidating the refresh token and clearing
+        the cookie
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/presenters.TokenResReq'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/presenters.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/presenters.ErrorResponse'
+      summary: Logout user
+      tags:
+      - Auth
+  /auth/password-reset:
+    post:
+      consumes:
+      - application/json
+      description: Sends a password reset confirmation link to the email if it exists.
+      parameters:
+      - description: Password reset request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/presenters.PasswordResetRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/presenters.PasswordResetResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/presenters.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/presenters.ErrorResponse'
+      summary: Request password reset
+      tags:
+      - Auth
+  /auth/password-reset/confirm:
+    get:
+      consumes:
+      - application/json
+      description: Validates the reset token and emails a new password to the user.
+      parameters:
+      - description: Password reset token
+        in: query
+        name: token
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/presenters.PasswordResetResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/presenters.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/presenters.ErrorResponse'
+      summary: Confirm password reset
+      tags:
+      - Auth
+  /auth/refresh:
+    post:
+      consumes:
+      - application/json
+      description: Refreshes the access and refresh tokens using the refresh token
+        from the cookie
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/presenters.TokenResReq'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/presenters.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/presenters.ErrorResponse'
+      summary: Refresh tokens
+      tags:
+      - Auth
+  /auth/update:
+    put:
+      consumes:
+      - application/json
+      description: Updates user profile fields. Requires Bearer access token in Authorization
+        header.
+      parameters:
+      - description: Bearer access token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Update request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/presenters.UserUpdateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/presenters.UserResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/presenters.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/presenters.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/presenters.ErrorResponse'
+      summary: Update user
+      tags:
+      - User
+  /auth/validate:
+    get:
+      consumes:
+      - application/json
+      description: Validates the provided access token
+      parameters:
+      - description: Bearer access token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/presenters.ErrorResponse'
+      summary: Validate access token
+      tags:
+      - Auth
+  /oauth/google:
+    get:
+      consumes:
+      - application/json
+      description: Initiates Google OAuth login. Builds a signed state token and redirects
+        to Google.
+      parameters:
+      - description: Frontend URL to redirect after callback (must be allowlisted)
+        in: query
+        name: redirect_url
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "307":
+          description: Temporary Redirect
+      summary: Google OAuth login
+      tags:
+      - OAuth
+  /oauth/google/callback:
+    get:
+      consumes:
+      - application/json
+      description: Handles Google OAuth callback, validates signed state, issues tokens
+        and sets refresh token cookie.
+      parameters:
+      - description: Signed OAuth state
+        in: query
+        name: state
+        required: true
+        type: string
+      - description: OAuth authorization code
+        in: query
+        name: code
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "307":
+          description: Redirects to frontend if redirect_url is provided and allowed
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/presenters.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/presenters.ErrorResponse'
+      summary: Google OAuth callback
+      tags:
+      - OAuth
+  /oauth/vk:
+    get:
+      consumes:
+      - application/json
+      description: Initiates VK OAuth login (not implemented)
+      produces:
+      - application/json
+      responses: {}
+      summary: VK OAuth login
+      tags:
+      - OAuth
+  /oauth/vk/callback:
+    get:
+      consumes:
+      - application/json
+      description: Handles VK OAuth callback (not implemented)
+      produces:
+      - application/json
+      responses: {}
+      summary: VK OAuth callback
+      tags:
+      - OAuth
+  /oauth/yandex:
+    get:
+      consumes:
+      - application/json
+      description: Initiates Yandex OAuth login. Builds a signed state token and redirects
+        to Yandex.
+      parameters:
+      - description: Frontend URL to redirect after callback (must be allowlisted)
+        in: query
+        name: redirect_url
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "307":
+          description: Temporary Redirect
+      summary: Yandex OAuth login
+      tags:
+      - OAuth
+  /oauth/yandex/callback:
+    get:
+      consumes:
+      - application/json
+      description: Handles Yandex OAuth callback, validates signed state, issues tokens
+        and sets refresh token cookie.
+      parameters:
+      - description: Signed OAuth state
+        in: query
+        name: state
+        required: true
+        type: string
+      - description: OAuth authorization code
+        in: query
+        name: code
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "307":
+          description: Redirects to frontend if redirect_url is provided and allowed
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/presenters.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/presenters.ErrorResponse'
+      summary: Yandex OAuth callback
+      tags:
+      - OAuth
+swagger: "2.0"
