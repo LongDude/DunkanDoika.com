@@ -18,6 +18,10 @@
           <input type="number" min="50" max="600" v-model.number="editor.form.value.model.max_service_period_after_vwp" />
         </label>
         <label>
+          {{ t('scenario.maxDaysInMilk') }}
+          <input type="number" min="200" max="1000" v-model.number="editor.form.value.model.max_days_in_milk" />
+        </label>
+        <label>
           {{ t('scenario.populationRegulation') }}
           <input type="number" step="0.01" min="0" max="1" v-model.number="editor.form.value.model.population_regulation" />
         </label>

@@ -10,7 +10,7 @@ from typing import Callable, Dict, List, Optional, Tuple
 import numpy as np
 
 from app.api.schemas import EventsByMonth, ForecastPoint, ForecastResult, ForecastResultMeta, ForecastSeries, ScenarioParams
-from app.simulator.herd_m5.cows_with_death import Cow, get_max_date_from_file, init_empirical_data, load_active_cows
+from app.simulator.herd_m5.cows_with_death import Cow, _load_empirical_lists, get_max_date_from_file, load_active_cows
 from app.simulator.herd_m5.monte_carlo import _run_one
 from app.simulator.herd_m5.samplers import EmpiricalDiscreteSampler, build_theoretical_samplers_from_empirical
 from app.simulator.herd_m5.simulation import DailyMetrics, ModelConfig
@@ -81,6 +81,42 @@ def _initial_snapshot(base_herd: list[Cow], snap_date: date) -> dict:
         "pregnant_heifer_count": pregnant_heifer,
         "avg_days_in_milk": avg_dim,
     }
+
+
+def _apply_initial_dim_limit(
+    base_herd: list[Cow],
+    cfg: ModelConfig,
+    report_date: date,
+) -> tuple[list[Cow], dict[str, int]]:
+    """Bring an imported snapshot to the same DIM state rules as the simulator."""
+    normalized: list[Cow] = []
+    stats = {"dried": 0, "removed": 0}
+    for cow in base_herd:
+        if not cow.is_milking() or cow.days_in_milk <= cfg.max_days_in_milk:
+            normalized.append(cow)
+            continue
+
+        if cow.status == "pregnant":
+            limit_date = (
+                cow.last_calving_date + timedelta(days=cfg.max_days_in_milk + 1)
+                if cow.last_calving_date is not None
+                else report_date
+            )
+            if cow.conception_date is not None and cow.conception_date >= limit_date:
+                cow.status = "culled"
+                stats["removed"] += 1
+                continue
+            cow.status = "dry"
+            cow.dry_date = min(limit_date, report_date)
+            cow.planned_dry_date = cow.dry_date
+            cow.days_in_milk = 0
+            cow.days_in_current_status = max(0, (report_date - cow.dry_date).days)
+            normalized.append(cow)
+            stats["dried"] += 1
+        else:
+            cow.status = "culled"
+            stats["removed"] += 1
+    return normalized, stats
 
 
 def _metric_to_row(metric: DailyMetrics) -> dict:
@@ -248,11 +284,9 @@ def _build_result_from_runs(
 
 
 def _prepare_model_config(file_path: str, mode: str, params: ScenarioParams) -> ModelConfig:
-    init_empirical_data(file_path)
-
-    from app.simulator.herd_m5.cows_with_death import get_empirical_lists
-
-    ages, dtd, sp = get_empirical_lists()
+    # Keep model preparation local to this dataset. The legacy global
+    # empirical cache can mix samples when forecast jobs run concurrently.
+    ages, dtd, sp = _load_empirical_lists(file_path)
 
     if mode == "empirical":
         age_sampler = EmpiricalDiscreteSampler(list(ages))
@@ -269,6 +303,7 @@ def _prepare_model_config(file_path: str, mode: str, params: ScenarioParams) -> 
         min_first_insem_age_days=model.min_first_insem_age_days,
         voluntary_waiting_period=model.voluntary_waiting_period,
         max_service_period_after_vwp=model.max_service_period_after_vwp,
+        max_days_in_milk=model.max_days_in_milk,
         population_regulation=model.population_regulation,
         gestation_lo=model.gestation_lo,
         gestation_hi=model.gestation_hi,
@@ -280,16 +315,25 @@ def _prepare_model_config(file_path: str, mode: str, params: ScenarioParams) -> 
     )
 
 
-def _build_manual_purchase_plan(params: ScenarioParams) -> list[Tuple[date, int]]:
-    return [(item.date_in, int(item.count)) for item in params.purchases]
+def _build_manual_purchase_plan(params: ScenarioParams, report_date: date) -> list[Tuple[date, int]]:
+    first_simulation_date = report_date + timedelta(days=1)
+    totals_by_date: dict[date, int] = {}
+    for item in params.purchases:
+        if item.date_in < report_date:
+            raise ValueError("PURCHASE_DATE_BEFORE_REPORT: purchase date must not precede report_date")
+        effective_date = first_simulation_date if item.date_in == report_date else item.date_in
+        totals_by_date[effective_date] = totals_by_date.get(effective_date, 0) + int(item.count)
+    return sorted(totals_by_date.items())
 
 
-def _warnings_for_params(params: ScenarioParams) -> list[str]:
+def _warnings_for_params(params: ScenarioParams, report_date: date) -> list[str]:
     warnings: list[str] = []
     if params.purchase_policy == "manual" and any(
         item.expected_calving_date is not None or item.days_pregnant is not None for item in params.purchases
     ):
         warnings.append("manual purchase expected_calving_date/days_pregnant are ignored by herd_m5")
+    if any(item.date_in == report_date for item in params.purchases):
+        warnings.append("manual purchases dated on report_date are applied on the first forecast day")
     return warnings
 
 
@@ -298,7 +342,7 @@ def _run_seed_job(args: dict) -> Tuple[list[dict], Dict[date, dict]]:
         {
             "base_herd": args["base_herd"],
             "cfg": args["cfg"],
-            "start_date": args["report_date"],
+            "start_date": args["report_date"] + timedelta(days=1),
             "file_path": args["temp_path"],
             "days": args["total_days"],
             "seed": args["seed"],
@@ -338,13 +382,16 @@ def run_forecast_herd_m5(
             target_dates.sort()
 
     horizon_end = target_dates[-1]
-    total_days = (horizon_end - report_date).days + 1
+    # ``report_date`` is an already observed start-of-day snapshot. Evolution
+    # begins on the following day, so a point N calendar days later receives
+    # exactly N DIM increments (not N + 1).
+    total_days = (horizon_end - report_date).days
 
     temp_path: str | None = None
     runs: list[list[dict]] = []
     events_accum: Dict[date, dict] = {}
     completed_runs = 0
-    warnings = _warnings_for_params(params)
+    warnings = _warnings_for_params(params, report_date)
 
     try:
         with tempfile.NamedTemporaryFile(mode="wb", suffix=".csv", delete=False) as tmp:
@@ -353,7 +400,13 @@ def run_forecast_herd_m5(
 
         cfg = _prepare_model_config(temp_path, params.mode, params)
         base_herd = load_active_cows(temp_path)
-        manual_plan = _build_manual_purchase_plan(params)
+        base_herd, initial_dim_stats = _apply_initial_dim_limit(base_herd, cfg, report_date)
+        if initial_dim_stats["dried"] or initial_dim_stats["removed"]:
+            warnings.append(
+                "initial DIM limit applied: "
+                f"dried={initial_dim_stats['dried']}, removed={initial_dim_stats['removed']}"
+            )
+        manual_plan = _build_manual_purchase_plan(params, report_date)
 
         safe_batch_size = max(1, batch_size)
         all_seeds = [params.seed + i * 9973 for i in range(params.mc_runs)]

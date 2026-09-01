@@ -47,6 +47,7 @@ class HerdM5ModelParams(BaseModel):
     min_first_insem_age_days: int = Field(default=365, ge=250, le=800)
     voluntary_waiting_period: int = Field(default=50, ge=0, le=200)
     max_service_period_after_vwp: int = Field(default=300, ge=50, le=600)
+    max_days_in_milk: int = Field(default=350, ge=200, le=1000)
     population_regulation: float = Field(default=0.5, ge=0.0, le=1.0)
 
     gestation_lo: int = Field(default=275, ge=240, le=320)

@@ -1,13 +1,57 @@
 # herd_sim/samplers.py
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import List, Sequence, Protocol, Tuple
+from typing import List, Optional, Sequence, Protocol, Tuple
 import random
 import math
 
 class IntSampler(Protocol):
     def sample(self, rng: random.Random) -> int: ...
     def update(self, new_values: Sequence[int]) -> None: ...
+
+
+def sample_at_least(
+    sampler: IntSampler,
+    rng: random.Random,
+    minimum: int,
+    *,
+    max_attempts: int = 512,
+) -> Optional[int]:
+    """Sample from ``sampler`` conditional on the result being >= ``minimum``.
+
+    Initial herd animals have already survived without the event up to the
+    report date. Sampling an unconditional age/service period for them would
+    place many events in the past and synchronise them on the first forecast
+    day. Empirical samplers can be conditioned exactly; bounded theoretical
+    samplers use rejection sampling and explicitly report empty support.
+    """
+    minimum = int(minimum)
+
+    if isinstance(sampler, EmpiricalDiscreteSampler):
+        candidates = [int(value) for value in sampler.values if int(value) >= minimum]
+        if not candidates:
+            return None
+        value = rng.choice(candidates)
+        if sampler.record_history:
+            sampler.history.append(value)
+        if sampler.append_to_values:
+            sampler.values.append(value)
+        return value
+
+    upper_bound: Optional[int] = None
+    if isinstance(sampler, (TruncatedNormalSampler, LogNormalSampler)):
+        upper_bound = int(sampler.hi)
+    elif isinstance(sampler, MixtureDrySampler):
+        upper_bound = max(int(sampler.peak_hi), int(sampler.tail_hi))
+
+    if upper_bound is not None and minimum > upper_bound:
+        return None
+
+    for _ in range(max(1, int(max_attempts))):
+        value = int(sampler.sample(rng))
+        if value >= minimum:
+            return value
+    return None
 
 @dataclass
 class EmpiricalDiscreteSampler:

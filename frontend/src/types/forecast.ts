@@ -134,6 +134,7 @@ export type HerdM5ModelParams = {
   min_first_insem_age_days: number
   voluntary_waiting_period: number
   max_service_period_after_vwp: number
+  max_days_in_milk: number
   population_regulation: number
   gestation_lo: number
   gestation_hi: number

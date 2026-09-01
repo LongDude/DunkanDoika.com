@@ -6,7 +6,7 @@ from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
 
 # Константы для статусов выбытия
-CULLED_STATUSES = {"Продана", "Брак", "Мертвое животное"}
+CULLED_STATUSES = {"Продана", "Брак", "Мертвое животное", "Перемещена"}
 
 @dataclass
 class Cow:
@@ -40,6 +40,8 @@ class Cow:
         self.dry_date = None
         self.planned_dry_date = None
         self.planned_calving_date = None
+        self.planned_first_insem_date = None
+        self.planned_conception_date = None
         self.days_in_current_status = 0
 
 
@@ -185,9 +187,17 @@ def _load_empirical_lists(file_path: str) -> Tuple[List[int], List[int], List[in
             dry = parse_date(row.get("Дата запуска тек.лакт", ""))
             calving = parse_date(row.get("Дата начала тек.лакт", ""))
 
-            # 1) возраст 1-го успешного осеменения (только для тёлок, lact=0)
+            # 1) Возраст первого успешного осеменения. For open/pregnant
+            # heifers the exact conception date is available. Once the first
+            # calving has happened, that field describes the current cow
+            # cycle, so recover the first-conception age from first calving
+            # minus the standard gestation length instead.
             if lact == 0 and birth and insem_success:
                 v = (insem_success - birth).days
+                if v > 0:
+                    ages_first_insem.append(v)
+            elif lact == 1 and birth and calving:
+                v = (calving - birth).days - 278
                 if v > 0:
                     ages_first_insem.append(v)
 

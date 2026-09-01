@@ -35,6 +35,7 @@ function createDefaultModelParams(): HerdM5ModelParams {
     min_first_insem_age_days: 365,
     voluntary_waiting_period: 50,
     max_service_period_after_vwp: 300,
+    max_days_in_milk: 350,
     population_regulation: 0.5,
     gestation_lo: 275,
     gestation_hi: 280,
@@ -66,6 +67,15 @@ function normalizeOptionalDate(value: string | null | undefined): string | null 
   if (value === null || value === undefined) return null
   const trimmed = String(value).trim()
   return trimmed.length > 0 ? trimmed : null
+}
+
+function nextIsoDate(value: string | null | undefined): string {
+  const normalized = normalizeOptionalDate(value)
+  if (!normalized) return ''
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(normalized)
+  if (!match) return normalized
+  const dt = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]) + 1))
+  return dt.toISOString().slice(0, 10)
 }
 
 function normalizeOptionalDays(value: number | null | undefined): number | null {
@@ -212,7 +222,7 @@ export function useScenarioEditor(options: ScenarioEditorOptions) {
 
   function addPurchase() {
     form.value.purchases.push({
-      date_in: form.value.report_date || '',
+      date_in: nextIsoDate(form.value.report_date),
       count: 10,
       expected_calving_date: null,
       days_pregnant: 150,
@@ -294,7 +304,7 @@ export function useScenarioEditor(options: ScenarioEditorOptions) {
       purchase_policy: params.purchase_policy,
       lead_time_days: params.lead_time_days,
       confidence_central: params.confidence_central,
-      model: { ...params.model },
+      model: { ...createDefaultModelParams(), ...params.model },
       purchases: (params.purchases || []).map(x => ({ ...x })),
     }
   }
@@ -321,7 +331,7 @@ export function useScenarioEditor(options: ScenarioEditorOptions) {
       purchase_policy: params.purchase_policy,
       lead_time_days: params.lead_time_days,
       confidence_central: params.confidence_central,
-      model: { ...params.model },
+      model: { ...createDefaultModelParams(), ...params.model },
       purchases: (params.purchases || []).map(x => ({ ...x })),
     }
   }

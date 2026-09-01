@@ -1,5 +1,6 @@
 # herd_sim/monte_carlo.py
 from __future__ import annotations
+import copy
 from dataclasses import dataclass
 from datetime import date
 from typing import List, Tuple, Dict, Optional, Any
@@ -33,7 +34,9 @@ class Bands:
 
 def _run_one(args: Dict[str, Any]) -> Dict[str, Any]:
     base_herd: List[Cow] = args["base_herd"]
-    cfg: ModelConfig = args["cfg"]
+    # A run must own its samplers. This keeps serial and multiprocessing
+    # execution reproducible even when a sampler records history.
+    cfg: ModelConfig = copy.deepcopy(args["cfg"])
     start_date: date = args["start_date"]
     file_path: str = args["file_path"]
     days: int = args["days"]
