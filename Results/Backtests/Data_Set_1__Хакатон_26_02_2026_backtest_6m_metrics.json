@@ -18,20 +18,21 @@
     "excluded_missing_previous_lactation": 543,
     "excluded_missing_first_pregnancy": 381,
     "excluded_dim_above_limit": 39,
+    "excluded_conception_after_dim_limit": 0,
     "transitioned_to_dry_at_dim_limit": 5,
     "excluded_overdue_pregnancy": 0,
     "excluded_dry_without_conception": 1,
-    "candidate_active_animals": 2693,
+    "candidate_active_animals": 2771,
     "included_rows": 2916,
     "active_cohort_animals": 1729,
-    "active_cohort_coverage_percent": 64.203
+    "active_cohort_coverage_percent": 62.396
   },
   "metrics": {
     "points": 6,
-    "mae_days": 4.637727766509561,
-    "rmse_days": 5.467806473086743,
-    "mape_percent": 2.224251802709182,
-    "bias_days": -4.637727766509561,
+    "mae_days": 4.370825448370302,
+    "rmse_days": 5.216687487267121,
+    "mape_percent": 2.091741465987009,
+    "bias_days": -4.370825448370302,
     "interval_coverage_percent": 16.666666666666668
   },
   "evaluation_status": "diagnostic",
